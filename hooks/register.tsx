@@ -224,14 +224,14 @@ async function runQuietly($: EngineInterface, argv: string[], timeoutMs: number)
   }
 }
 
-/** Opens `url` in the user's browser: wslview or explorer.exe under WSL, open on macOS, else xdg-open. */
+/** Opens `url` in the user's browser: wslview or PowerShell under WSL, open on macOS, else xdg-open. */
 async function openBrowser($: EngineInterface, url: string) {
   const wsl = await $.env.get('WSL_DISTRO_NAME')
   if (wsl !== undefined && wsl !== '') {
     if ((await runQuietly($, ['wslview', url], 10_000))?.exitCode === 0) return true
-    // explorer.exe exits 1 even when it opened the page; trying is the best we know.
-    await runQuietly($, ['explorer.exe', url], 10_000)
-    return true
+    // Not explorer.exe: it opens File Explorer instead of the browser for a URL this long.
+    const command = `Start-Process '${url.replace(/'/g, "''")}'`
+    return (await runQuietly($, ['powershell.exe', '-NoProfile', '-NonInteractive', '-Command', command], 10_000))?.exitCode === 0
   }
   const system = (await runQuietly($, ['uname'], 5_000))?.stdout.trim() ?? ''
   return (await runQuietly($, [system === 'Darwin' ? 'open' : 'xdg-open', url], 10_000))?.exitCode === 0

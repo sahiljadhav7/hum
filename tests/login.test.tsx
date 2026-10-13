@@ -45,12 +45,16 @@ test('under WSL, /hum-login opens the Spotify login with wslview, PKCE and the s
   )
 })
 
-test('under WSL without wslview, it falls back to explorer.exe', async ($, on) => {
+test('under WSL without wslview, it opens the whole login URL with PowerShell, not explorer.exe', async ($, on) => {
   setup(on, { WSL_DISTRO_NAME: 'Ubuntu' })
   const ran = host(on, argv => ({ exitCode: argv[0] === 'wslview' ? 127 : 0 }))
   await startSession($, on)
   await login($, CLIENT_ID)
-  expect(ran.some(r => r.argv[0] === 'explorer.exe')).toBe(true)
+  expect(ran.some(r => r.argv[0] === 'explorer.exe')).toBe(false)
+  const ps = ran.find(r => r.argv[0] === 'powershell.exe')!
+  const url = new URL(/^Start-Process '(.*)'$/.exec(ps.argv[ps.argv.length - 1]!)![1]!)
+  expect(url.searchParams.get('client_id')).toBe(CLIENT_ID)
+  expect(url.searchParams.get('state')).toMatch(/^[A-Za-z0-9_-]{16,}$/)
 })
 
 test('on Linux it uses xdg-open; on macOS, open', async ($, on) => {

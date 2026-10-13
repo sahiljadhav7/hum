@@ -5,7 +5,7 @@ A Spotify player bar inside [Claude Code](https://claude.com/claude-code). hum d
 <img width="1683" height="128" alt="Hum ss" src="https://github.com/user-attachments/assets/8ca33059-49fd-4353-8fff-cea84c063503" />
 
 
-> **Status: work in progress.** The Bar, its three Looks, the Spotify Web API client and `/hum-login` are built. The login hasn't yet been tried end to end against a real account. Without one, try hum with **Demo mode**, a fake Spotify built into hum. See [Roadmap](#roadmap).
+> **Status: work in progress.** The Bar, its three Looks, the Spotify Web API client and `/hum-login` work with a real Spotify account. Without one, try hum with **Demo mode**, a fake Spotify built into hum. See [Roadmap](#roadmap).
 
 ## What it does
 
@@ -84,7 +84,7 @@ A `/plugin install` line comes later, when hum is packaged for sharing.
 | --- | --- | --- |
 | 01 | The Bar, its Looks, `/hum-style` | Done |
 | 02 | Spotify Web API client, Demo mode | Done |
-| 03 | `/hum-login` and `/hum-logout` | Built; awaiting a real-account check |
+| 03 | `/hum-login` and `/hum-logout` | Done |
 | 04 | Prototype: decoding real album art | Planned |
 | 05 | Real Cover in the Bar | Planned |
 | 06 | `/hum-playlist` | Planned |
