@@ -1,12 +1,16 @@
 # hum
 
-A Claude Code plugin that shows what Spotify is playing and offers clickable playback controls, like the player bar in the Spotify desktop app, on a single row under Claude Code's prompt.
+A Claude Code plugin that shows what Spotify is playing and offers clickable playback controls, like the player bar in the Spotify desktop app, in the space under Claude Code's prompt.
 
 ## Language
 
 **Bar**:
-The one-row strip under the prompt holding the Controls, Seek bar, Volume slider and Cover, with no track title or artist names.
+The strip under the prompt, two or three rows depending on the Look, showing the track's title and artist with the Controls, Seek bar, Volume icon and Cover.
 _Avoid_: Player, widget, status line, pane
+
+**Look**:
+One of the Bar's visual designs, chosen by the user: Glossy, Minimal or Glass.
+_Avoid_: Theme, skin, style (except in the `/hum-style` command name)
 
 **Player**:
 The Spotify playback the Bar observes and controls, wherever it is actually running.
@@ -27,19 +31,20 @@ The track, its artists, progress, duration, and the Player's play, shuffle, repe
 _Avoid_: Status, current song
 
 **Controls**:
-The clickable buttons: shuffle, previous, play/pause, next, repeat.
+The clickable buttons: previous, play/pause and next, plus shuffle and repeat.
 _Avoid_: Buttons row, transport
 
 **Seek bar**:
-The progress slider with a single time: the remaining time, which starts at the track's length and counts down. Clicking it jumps playback to that position.
-_Avoid_: Scrubber, progress bar
+The thin line showing how far into the track playback is; clicking it jumps playback to that position. Some Looks show the remaining time beside it, counting down.
+_Avoid_: Scrubber, progress bar, progress line
 
 **Cover**:
-The album artwork of the current track, drawn to the right of the Controls.
+The album artwork of the current track: a real picture where the terminal can draw one.
 _Avoid_: Album art, thumbnail, artwork
 
-**Volume slider**:
-The slider setting the Active device's volume.
+**Volume icon**:
+The speaker glyph showing the Active device's volume level; clicking it mutes and unmutes.
+_Avoid_: Volume slider (the Bar has none)
 
 **Developer app**:
 The Spotify for Developers registration each user creates for themselves, whose client ID hum logs in with. The owner must have Premium.

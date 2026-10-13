@@ -1,0 +1,7 @@
+{
+  "name": "hum",
+  "version": "0.1.0",
+  "description": "A Spotify player Bar under Claude Code's prompt: play, skip, seek, mute, shuffle and repeat with a click.",
+  "author": { "name": "sahiljadhav7" },
+  "types": "./types/index.d.ts"
+}

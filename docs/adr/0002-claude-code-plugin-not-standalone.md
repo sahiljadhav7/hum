@@ -10,6 +10,6 @@ hum is a Claude Code plugin whose hooks module draws the Bar in Claude Code's ow
 ## Consequences
 
 - hum only runs inside Claude Code. There's no standalone binary.
-- The Bar replaces Claude Code's hint line under the prompt (`esc to interrupt`, `? for shortcuts`), and it is one row high.
+- The Bar replaces Claude Code's hint line under the prompt (`esc to interrupt`, `? for shortcuts`). It was planned as one row; on 2026-10-13 it became two or three rows with the title and artist (see DESIGN.md, "The Bar"). The row under the prompt shows all of them.
 - Prototype 1 (2026-10-13) confirmed that the row under the prompt accepts plain clicks. The plugin API only delivers clicks in Claude Code's fullscreen layout.
 - The Cover shows real pixels only in terminals the plugin UI supports images in (kitty, Ghostty). Everywhere else it falls back to colored cells.

@@ -1,6 +1,6 @@
 # hum: design
 
-hum is a Claude Code plugin. It draws a one-row Spotify Bar under Claude Code's prompt, with clickable playback Controls, a Seek bar, a Volume slider and the Cover. Terms are defined in [CONTEXT.md](CONTEXT.md). The key decisions are recorded in [ADR 0001](docs/adr/0001-spotify-web-api-only.md) (Web API only) and [ADR 0002](docs/adr/0002-claude-code-plugin-not-standalone.md) (Claude Code plugin, not a standalone app).
+hum is a Claude Code plugin. It draws a Spotify Bar under Claude Code's prompt, with the track's title and artist, clickable playback Controls, a Seek bar, a Volume icon and the Cover. Terms are defined in [CONTEXT.md](CONTEXT.md). The key decisions are recorded in [ADR 0001](docs/adr/0001-spotify-web-api-only.md) (Web API only) and [ADR 0002](docs/adr/0002-claude-code-plugin-not-standalone.md) (Claude Code plugin, not a standalone app).
 
 This document replaces the tmux, standalone, and title/artist plan in `idea.md`.
 
@@ -16,10 +16,10 @@ This document replaces the tmux, standalone, and title/artist plan in `idea.md`.
 
 - **Title and artist are shown.** This reverses the earlier "no title or artist" decision, after the user supplied a reference screenshot.
 - **Controls** `◀◀ ❚❚ ▶▶` (` ▶` when paused), plus `⇄` shuffle, `◁))` volume and `↻` repeat on the right. Plain click.
-- **Progress**: a thin line you can click to seek. Glossy and Minimal also show a fixed 7-cell countdown (`-1:14`).
+- **Seek bar**: a thin line you can click to seek. Glossy and Minimal also show a fixed 7-cell countdown (`-1:14`).
 - **Volume** is an icon, not a slider: it shows the level (`◁× ` / `◁) ` / `◁))`) and a click mutes or unmutes.
 - **Cover**: a real image only where the terminal can draw one (kitty, Ghostty). Glass shows a solid swatch elsewhere; Glossy and Minimal leave it out.
-- **Right-aligned.** As the width shrinks, the right-hand icons drop first, then the progress line shrinks.
+- **Right-aligned.** As the width shrinks, the right-hand icons drop first, then the Seek bar shrinks.
 - **Height**: two rows (Glossy, Minimal) or three (Glass). The row under the prompt shows them all (confirmed by a user screenshot).
 - **`NO_COLOR`**: Minimal with no colors at all, using only bold, underline and inverse on hover.
 - **Idle state**: one dim hint line in place of the Controls, e.g. `hum: run /hum-login` or `hum: no active Spotify device`.
@@ -76,9 +76,9 @@ The user asked for "smooth and minimalist" after Glass. Filled backgrounds are w
 - **Two rows, right-aligned**: `title · artist` above the controls row. The title is bold `text`, `· artist` is `inactive`, and it truncates with `…`.
 - **No backgrounds anywhere**: text on the terminal's own background. Colors are Claude Code theme keys (`text`, `inactive`, `subtle`), so it works in light and dark themes.
 - **Controls** `◀◀ ❚❚ ▶▶` in `text`. **Icons** `⇄ ◁)) ↻` in `inactive`, turning bold `text` on hover. Shuffle and repeat on: bold and underlined `text`. The speaker shows the level (`◁× ` / `◁) ` / `◁))`); a click mutes or unmutes.
-- **Smooth progress line**: `━` played in `text`, then a half-cell `╸`, on a light `─` track in `subtle`. It moves in half-cell steps with no knob, and clicking it seeks. The countdown is a fixed 7 cells in `inactive`.
+- **Smooth Seek bar**: `━` played in `text`, then a half-cell `╸`, on a light `─` track in `subtle`. It moves in half-cell steps with no knob, and clicking it seeks. The countdown is a fixed 7 cells in `inactive`.
 - **Cover**: only where it can be a real picture (kitty or Ghostty), as a 2×1-cell rounded image with clear corners at the right end. It is left out in Windows Terminal rather than drawn as a block.
-- **Narrow**: the right-hand icons drop first, then the progress line shrinks (8 cells minimum).
+- **Narrow**: the right-hand icons drop first, then the Seek bar shrinks (8 cells minimum).
 
 ## Look: Glass (from the user's screenshot)
 
@@ -89,7 +89,7 @@ The user supplied a screenshot of a glossy capsule player and asked for the Bar 
   - **kitty and Ghostty**: a light-to-dark gradient (`#7D6C5D` → `#6A594C` → `#594A3E`) stands in for the frosted gloss, with anti-aliased half-disc image caps.
 - kitty is **optional**. hum never requires it.
 - **Left**: `◀◀ ❚❚ ▶▶` (` ▶` when paused) in `#E9E2DA`, white and bold on hover. These replace `⏪⏩`, which render as emoji.
-- **Card** (inset, darker: flat `#4A3D33` without images, `#4F4237`→`#463A30` in kitty): a 4×2-cell Cover (a solid color swatch without images, a rounded picture in kitty), the title (bold `#F5F0EB`) and the artist (`#B7ABA0`), truncated with `…`. Along its bottom is a thin `▁` progress line, light `#EDE6DF` for played and dark `#2E251F` for the rest; clicking it seeks. No countdown.
+- **Card** (inset, darker: flat `#4A3D33` without images, `#4F4237`→`#463A30` in kitty): a 4×2-cell Cover (a solid color swatch without images, a rounded picture in kitty), the title (bold `#F5F0EB`) and the artist (`#B7ABA0`), truncated with `…`. Along its bottom is a thin `▁` Seek bar, light `#EDE6DF` for played and dark `#2E251F` for the rest; clicking it seeks. No countdown.
 - **Right**: `⇄  ◁))  ↻`. The speaker shows the level (`◁× ` muted, `◁) ` low, `◁))` high), and a click mutes or unmutes. Shuffle and repeat show bold and underlined when on; repeat-one is `↻¹`.
 - **Narrow**: below about 62 columns the right-hand icons drop first, then the title area shrinks (6 cells minimum).
 - **Hex colors**, not theme keys. The capsule paints its own background, so it reads the same on light and dark themes.
