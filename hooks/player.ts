@@ -25,6 +25,8 @@ export const HINT_LOGIN = 'hum: run /hum-login'
 export const HINT_NO_DEVICE = 'hum: no active Spotify device'
 export const HINT_NOTHING = 'hum: nothing playing'
 export const HINT_AD = 'hum: ad playing'
+export const HINT_PASTE = "hum: couldn't catch the login. Paste the address the browser landed on: /hum-login <address>"
+export const HINT_PREMIUM = 'hum: Spotify Premium is needed to control playback'
 
 /** The volume (0 to 1) unmute restores when hum doesn't know the one from before. */
 export const DEFAULT_VOLUME = 0.5

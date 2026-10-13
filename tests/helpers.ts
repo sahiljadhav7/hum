@@ -2,6 +2,9 @@
 // store, session, Spotify) and reads of the mounted Bar.
 import { mock } from 'claude-code/testing'
 
+// The test environment has setTimeout; its type declarations don't list it.
+declare function setTimeout(fn: (...args: unknown[]) => void, ms: number): unknown
+
 export const under = (columns = 100) => ({
   component: 'PromptHint',
   props: { isDraft: false, isWorking: false, hint: '? for shortcuts' },
@@ -94,3 +97,52 @@ export function playerBody(over: Partial<{
     },
   }
 }
+
+/** A command hum ran on the host, as a test standing in for the host saw it. */
+export type Ran = { argv: string[] }
+
+/**
+ * Stands in for the host's commands beneath the plugin. `answer` gets each
+ * `$.process.run` argv and returns its exit code and output; all are recorded.
+ * By default every command succeeds except `node`, which isn't installed.
+ */
+export function host(on: any, answer: (argv: string[]) => { exitCode: number; stdout?: string } = argv => ({ exitCode: argv[0] === 'node' ? 127 : 0 })) {
+  const ran: Ran[] = []
+  on('process.run', (_$: unknown, e: { argv: readonly string[] }) => {
+    const argv = [...e.argv]
+    ran.push({ argv })
+    const res = answer(argv)
+    return { value: { exitCode: res.exitCode, stdout: res.stdout ?? '', stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }
+  })
+  return ran
+}
+
+/** Waits (a turn of the event loop at a time, up to ~1 s) until `ready()` holds. */
+export async function until(ready: () => boolean) {
+  for (let i = 0; i < 200 && !ready(); i++) await new Promise(r => setTimeout(r, 5))
+}
+
+/** The login link hum opened in the browser (the last argument of the opener). */
+export const openedUrl = (ran: Ran[]) => {
+  const open = ran.find(r => ['wslview', 'explorer.exe', 'xdg-open', 'open'].includes(r.argv[0]!))
+  return open === undefined ? undefined : new URL(open.argv[open.argv.length - 1]!)
+}
+
+export const CLIENT_ID = '0123456789abcdef0123456789abcdef'
+
+/** base64url(SHA-256(text)): the PKCE challenge, computed independently of hum. */
+export async function sha256url(text: string) {
+  const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text)))
+  return btoa(String.fromCharCode(...digest)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+}
+
+/** The form fields of a request body (application/x-www-form-urlencoded). */
+export const formFields = (body: string | undefined): Record<string, string> =>
+  Object.fromEntries(
+    (body ?? '')
+      .split('&')
+      .filter(pair => pair !== '')
+      .map(pair => pair.split('=').map(part => decodeURIComponent(part.replace(/\+/g, ' '))) as [string, string]),
+  )
+
+export const TOKEN_URL = 'https://accounts.spotify.com/api/token'

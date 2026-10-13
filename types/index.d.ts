@@ -63,8 +63,12 @@ declare module 'claude-code' {
       backoffUntil: number
       /** The volume (0 to 1) to restore on unmute; null when not muted. */
       mutedFrom: number | null
+      /** A login /hum-login started, waiting for Spotify's redirect (PKCE verifier and state). */
+      pendingLogin: { clientId: string; verifier: string; state: string } | null
       /** An access token Spotify refused (401); not sent again. */
       refusedToken: string | null
+      /** Spotify said the account needs Premium (403 PREMIUM_REQUIRED); nothing more is sent until the next login. */
+      premiumRequired: boolean
       style: Style
     }
   }

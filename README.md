@@ -5,7 +5,7 @@ A Spotify player bar inside [Claude Code](https://claude.com/claude-code). hum d
 <img width="1683" height="128" alt="Hum ss" src="https://github.com/user-attachments/assets/8ca33059-49fd-4353-8fff-cea84c063503" />
 
 
-> **Status: work in progress.** The Bar, its three Looks and the Spotify Web API client are built. Logging in to Spotify (`/hum-login`) is the next piece, so for now you can try hum with **Demo mode**, a fake Spotify built into hum. See [Roadmap](#roadmap).
+> **Status: work in progress.** The Bar, its three Looks, the Spotify Web API client and `/hum-login` are built. The login hasn't yet been tried end to end against a real account. Without one, try hum with **Demo mode**, a fake Spotify built into hum. See [Roadmap](#roadmap).
 
 ## What it does
 
@@ -20,7 +20,7 @@ A Spotify player bar inside [Claude Code](https://claude.com/claude-code). hum d
 ## Requirements
 
 - **Claude Code**, in its **fullscreen layout**. Claude Code only passes mouse clicks to plugins there. That's the default outside tmux.
-- For real Spotify (once `/hum-login` lands): **Spotify Premium** and your own free **Spotify for Developers app**. Spotify's API rules require both. See [ADR 0001](docs/adr/0001-spotify-web-api-only.md) for why.
+- For real Spotify: **Spotify Premium** and your own free **Spotify for Developers app**. Spotify's API rules require both. See [ADR 0001](docs/adr/0001-spotify-web-api-only.md) for why.
 - Optional:
   - **24-bit color** (`COLORTERM=truecolor`) for the warm brown capsules; without it hum uses a graphite grey palette. On Windows Terminal under WSL, add `export COLORTERM=truecolor` to `~/.bashrc`.
   - **kitty or Ghostty**, for smooth rounded capsule ends and a real Cover picture.
@@ -41,6 +41,19 @@ Then, inside Claude Code:
 
 The Bar appears under the prompt with fake tracks. Click away.
 
+### Log in to Spotify
+
+1. Run `/hum-login`. It shows the one-time setup.
+2. Create an app at https://developer.spotify.com/dashboard.
+3. In the app's Redirect URIs, add exactly `http://127.0.0.1:8898/callback`, tick **Web API**, and save.
+4. Copy the app's **Client ID** and run `/hum-login <client-id>`.
+
+The Spotify login opens in your browser; approve it.
+- **With `node` installed**, hum finishes on its own.
+- **Without it**, copy the address the browser lands on (it starts with `http://127.0.0.1:8898/callback`) and run `/hum-login <that address>`.
+
+hum keeps the login between sessions and refreshes it by itself. `/hum-logout` forgets it.
+
 A `/plugin install` line comes later, when hum is packaged for sharing.
 
 ## Commands
@@ -51,14 +64,16 @@ A `/plugin install` line comes later, when hum is packaged for sharing.
 | `/hum-demo` | Turns Demo mode (a fake Spotify inside hum) on or off for this session. |
 | `/hum-demo no-device` | Simulates "no active Spotify device" in Demo mode. |
 | `/hum-demo no-volume` | Simulates a device that doesn't allow remote volume (the volume icon greys out). |
-| `/hum-login`, `/hum-logout` | *Coming next.* Connect your Spotify account. |
+| `/hum-login [client-id \| redirect URL]` | Logs in to Spotify. With no argument, shows the one-time setup. |
+| `/hum-logout` | Forgets the login. |
 | `/hum-playlist` | *Planned.* Browse your playlists and pick a track. |
 
 ## What the Bar shows when it can't play
 
 | Hint | Meaning |
 | --- | --- |
-| `hum: run /hum-login` | Not logged in to Spotify (or Spotify refused the login). |
+| `hum: run /hum-login` | Not logged in to Spotify, or the login expired and couldn't be refreshed. |
+| `hum: Spotify Premium is needed to control playback` | The account is free. Spotify only lets Premium accounts control playback. |
 | `hum: no active Spotify device` | Nothing is playing on any Spotify device. Start Spotify somewhere. |
 | `hum: nothing playing` | A device is active but has nothing loaded. |
 | `hum: ad playing` | Spotify is playing an ad. |
@@ -69,7 +84,7 @@ A `/plugin install` line comes later, when hum is packaged for sharing.
 | --- | --- | --- |
 | 01 | The Bar, its Looks, `/hum-style` | Done |
 | 02 | Spotify Web API client, Demo mode | Done |
-| 03 | `/hum-login` and `/hum-logout` | Next |
+| 03 | `/hum-login` and `/hum-logout` | Built; awaiting a real-account check |
 | 04 | Prototype: decoding real album art | Planned |
 | 05 | Real Cover in the Bar | Planned |
 | 06 | `/hum-playlist` | Planned |

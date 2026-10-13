@@ -40,8 +40,8 @@ This document replaces the tmux, standalone, and title/artist plan in `idea.md`.
 
 | Command | Does |
 | --- | --- |
-| `/hum-login` | Walks the user through creating a Developer app and pasting the client ID. Then it opens the browser for the OAuth PKCE login. A `node` helper on 127.0.0.1:8898 catches the redirect; if `node` isn't available, the user pastes the redirect URL back. |
-| `/hum-logout` | Forgets the stored tokens. |
+| `/hum-login` | With no argument: the one-time Developer app setup steps (the dashboard link, the exact redirect URI `http://127.0.0.1:8898/callback`, the scopes). `/hum-login <client-id>` opens the Spotify login in the browser (wslview or explorer.exe under WSL, `open` on macOS, `xdg-open` on Linux), with PKCE and no client secret. A `node` helper on 127.0.0.1:8898, started before the browser opens, catches the redirect and finishes on its own. Without `node`, or if the helper can't listen, paste the address the browser lands on: `/hum-login <that URL>` (the Bar says so). Later, `/hum-login` with no argument logs in again with the stored client ID. Tokens are kept in `$.store` and refreshed a minute before they expire, or on a `401` (with one retry). A failure on Spotify's side (5xx, no answer) is temporary and doesn't log you out. A free account (`403 PREMIUM_REQUIRED`) gets `hum: Spotify Premium is needed to control playback`, and hum stops sending until the next login. |
+| `/hum-logout` | Forgets the login (client ID and tokens). The Bar goes back to `hum: run /hum-login`. |
 | `/hum-playlist` | Opens a pane listing the user's playlists, then the chosen playlist's tracks. Picking a track plays it on the Active device. |
 | `/hum-style` | Switches the look: Glossy (default), Minimal or Glass. With no argument it shows the choices; the choice is remembered across sessions. |
 | `/hum-demo` | Turns Demo mode on or off for the session. A fake Web API inside hum answers the real client's requests in Spotify's own JSON, so the client and its parser run end to end. `/hum-demo no-device` and `/hum-demo no-volume` toggle simulations of no Active device and of a Device without remote volume (they turn Demo mode on). |

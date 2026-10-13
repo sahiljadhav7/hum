@@ -6,11 +6,13 @@ import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
 import type { DemoPlayer, Style } from '../types'
+import { authorizeUrl, challengeOf, formOf, HELPER_SCRIPT, isClientId, parseRedirect, parseTokenReply, randomToken, REDIRECT_URI, SETUP_STEPS, TOKEN_URL } from './auth'
+import type { Auth, PendingLogin, TokenReply } from './auth'
 import { drawBar } from './bar/draw'
 import type { Caps } from './bar/draw'
 import { isStyle, STYLE_NAMES, STYLES } from './bar/look'
 import { demoAnswer, demoPlayer } from './demo'
-import { HINT_LOGIN, idle } from './player'
+import { HINT_LOGIN, HINT_PASTE, HINT_PREMIUM, idle } from './player'
 import type { Command } from './player'
 import { callFor, GET_PLAYER, muteTarget, parsePlayer, urlOf } from './spotify'
 import type { ApiCall } from './spotify'
@@ -22,20 +24,78 @@ const nowPlaying = atom({ plugin: 'hum', key: 'nowPlaying' } as const, idle(HINT
 const demo = atom({ plugin: 'hum', key: 'demo' } as const, { isOn: false, player: demoPlayer(0) as DemoPlayer })
 const backoffUntil = atom({ plugin: 'hum', key: 'backoffUntil' } as const, 0)
 const mutedFrom = atom({ plugin: 'hum', key: 'mutedFrom' } as const, null as number | null)
+const pendingLogin = atom({ plugin: 'hum', key: 'pendingLogin' } as const, null as PendingLogin | null)
 const refusedToken = atom({ plugin: 'hum', key: 'refusedToken' } as const, null as string | null)
+const premiumRequired = atom({ plugin: 'hum', key: 'premiumRequired' } as const, false)
 
 // The latest poll; an older one that answers late doesn't overwrite it.
 // (A module variable: a reload starts it over, which is harmless.)
 let latestPoll = 0
+
+// The refresh in flight, if any: concurrent requests share it rather than each
+// spending the same refresh token (which Spotify may rotate). Module variable.
+let refreshing: Promise<RefreshResult> | null = null
 const styleRef = { plugin: 'hum', key: 'style' } as const
 
 type Reply = { status: number; text: string }
 
-/** The access token /hum-login stored (issue 03), unless Spotify has refused it. */
+/** Refresh this long before the access token expires. */
+const REFRESH_EARLY_MS = 60_000
+
+/** The login /hum-login stored, if any. */
+async function storedAuth($: EngineInterface): Promise<Auth | null> {
+  const auth = (await $.store.get('auth')) as Partial<Auth> | undefined
+  if (typeof auth?.accessToken !== 'string' || auth.accessToken === '') return null
+  return {
+    clientId: auth.clientId ?? '',
+    accessToken: auth.accessToken,
+    refreshToken: auth.refreshToken ?? '',
+    expiresAt: typeof auth.expiresAt === 'number' ? auth.expiresAt : Number.POSITIVE_INFINITY,
+  }
+}
+
+type RefreshResult = { token: string } | 'refused' | 'temporary'
+
+/**
+ * Trades the refresh token for a new access token. One refresh at a time:
+ * a second caller waits for the first. Never writes back over a login that
+ * changed meanwhile (a new /hum-login, or /hum-logout).
+ */
+async function refresh($: EngineInterface, auth: Auth): Promise<RefreshResult> {
+  if (refreshing !== null) return refreshing
+  if (auth.refreshToken === '' || auth.clientId === '') return 'refused'
+  refreshing = (async (): Promise<RefreshResult> => {
+    const reply = await tokenRequest($, { grant_type: 'refresh_token', refresh_token: auth.refreshToken, client_id: auth.clientId })
+    if (!reply.ok) return reply.isTemporary ? 'temporary' : 'refused'
+    const current = await storedAuth($)
+    if (current === null || current.refreshToken !== auth.refreshToken) return current === null ? 'refused' : { token: current.accessToken }
+    // Spotify may rotate the refresh token; keep the old one when it doesn't.
+    await $.store.set('auth', { ...current, accessToken: reply.accessToken, refreshToken: reply.refreshToken ?? current.refreshToken, expiresAt: reply.expiresAt })
+    return { token: reply.accessToken }
+  })()
+  try {
+    return await refreshing
+  } finally {
+    refreshing = null
+  }
+}
+
+/**
+ * A usable access token: the stored one, refreshed first if it's about to
+ * expire. Null if logged out, or if Spotify refused it (then the Bar asks to
+ * log in again).
+ */
 async function accessToken($: EngineInterface) {
-  const auth = (await $.store.get('auth')) as { accessToken?: unknown } | undefined
-  const token = typeof auth?.accessToken === 'string' && auth.accessToken !== '' ? auth.accessToken : null
-  return token !== null && token !== (await read($, refusedToken)) ? token : null
+  const auth = await storedAuth($)
+  if (auth === null || auth.accessToken === (await read($, refusedToken))) return null
+  if ((await $.clock.now()) < auth.expiresAt - REFRESH_EARLY_MS) return auth.accessToken
+  const renewed = await refresh($, auth)
+  if (renewed === 'refused') {
+    await unauthorized($, auth.accessToken)
+    return null
+  }
+  // A temporary failure: try the old token; the next poll refreshes again.
+  return renewed === 'temporary' ? auth.accessToken : renewed.token
 }
 
 /**
@@ -54,26 +114,42 @@ async function api($: EngineInterface, call: ApiCall): Promise<Reply | null> {
     })
     return reply
   }
-  if (now < (await read($, backoffUntil))) return null
+  if (now < (await read($, backoffUntil)) || (await read($, premiumRequired))) return null
   const token = await accessToken($)
   if (token === null) return null
   // An explicit empty body on PUT and POST: Spotify can refuse one without a length (411).
-  const res = await $.http.fetch(urlOf(call), {
-    method: call.method,
-    headers: { Authorization: `Bearer ${token}` },
-    ...(call.method === 'GET' ? {} : { body: '' }),
-  })
+  const send = (bearer: string) =>
+    $.http.fetch(urlOf(call), {
+      method: call.method,
+      headers: { Authorization: `Bearer ${bearer}` },
+      ...(call.method === 'GET' ? {} : { body: '' }),
+    })
+  let res = await send(token)
+  let isRefused = false
+  if (res.status === 401) {
+    // The token was refused: refresh it and retry once.
+    const auth = await storedAuth($)
+    const renewed = auth === null ? 'refused' : await refresh($, auth)
+    if (typeof renewed === 'object') res = await send(renewed.token)
+    else isRefused = renewed === 'refused'
+  }
   if (res.status === 429) {
     // Wait as long as Spotify asks before sending anything else.
     const header = Object.entries(res.headers).find(([k]) => k.toLowerCase() === 'retry-after')?.[1]
     const seconds = Number(header ?? 1)
     await update($, backoffUntil, () => now + Math.max(1, Number.isFinite(seconds) ? seconds : 1) * 1000)
   }
-  if (res.status === 401) await unauthorized($, token)
+  // Refused for good (not a temporary failure at accounts.spotify.com): ask to log in again.
+  if (res.status === 401 && isRefused) await unauthorized($, (await storedAuth($))?.accessToken ?? token)
+  if (res.status === 403 && res.text.includes('PREMIUM_REQUIRED')) {
+    // A free account: say so once and stop, rather than failing on every poll.
+    await update($, premiumRequired, () => true)
+    await update($, nowPlaying, () => idle(HINT_PREMIUM))
+  }
   return { status: res.status, text: res.text }
 }
 
-/** Spotify refused `token`. Issue 03 refreshes it here; until then, stop sending it and ask to log in. */
+/** Spotify refused `token`, even after a refresh: stop sending it and ask to log in again. */
 async function unauthorized($: EngineInterface, token: string) {
   await update($, refusedToken, () => token)
   await update($, nowPlaying, () => idle(HINT_LOGIN))
@@ -139,6 +215,153 @@ async function runDemo($: EngineInterface, args: string) {
   return { text: `hum: Demo mode on; simulating "${label}" ${isSimulating ? 'on' : 'off'}.` }
 }
 
+/** Runs a host command; its result, or null if it couldn't run. */
+async function runQuietly($: EngineInterface, argv: string[], timeoutMs: number) {
+  try {
+    return await $.process.run(argv, { timeoutMs })
+  } catch {
+    return null
+  }
+}
+
+/** Opens `url` in the user's browser: wslview or explorer.exe under WSL, open on macOS, else xdg-open. */
+async function openBrowser($: EngineInterface, url: string) {
+  const wsl = await $.env.get('WSL_DISTRO_NAME')
+  if (wsl !== undefined && wsl !== '') {
+    if ((await runQuietly($, ['wslview', url], 10_000))?.exitCode === 0) return true
+    // explorer.exe exits 1 even when it opened the page; trying is the best we know.
+    await runQuietly($, ['explorer.exe', url], 10_000)
+    return true
+  }
+  const system = (await runQuietly($, ['uname'], 5_000))?.stdout.trim() ?? ''
+  return (await runQuietly($, [system === 'Darwin' ? 'open' : 'xdg-open', url], 10_000))?.exitCode === 0
+}
+
+/** POSTs a form to Spotify's token endpoint; the parsed answer. No answer at all counts as temporary. */
+async function tokenRequest($: EngineInterface, fields: Record<string, string>): Promise<TokenReply> {
+  try {
+    const res = await $.http.fetch(TOKEN_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: formOf(fields),
+    })
+    return parseTokenReply(res.status, res.text, await $.clock.now())
+  } catch {
+    return { ok: false, reason: "couldn't reach accounts.spotify.com", isTemporary: true }
+  }
+}
+
+/** A fresh login clears what the old one left behind. */
+async function clearLoginTrouble($: EngineInterface) {
+  await update($, refusedToken, () => null)
+  await update($, premiumRequired, () => false)
+}
+
+/** Finishes a login from Spotify's redirect URL (pasted, or caught by the helper). */
+async function finishLogin($: EngineInterface, redirectUrl: string) {
+  const pending = await read($, pendingLogin)
+  const redirect = parseRedirect(redirectUrl)
+  if (pending === null) return 'hum: no login in progress. Run /hum-login <client-id> first.'
+  if (redirect === null || redirect.state !== pending.state)
+    return "hum: that redirect URL doesn't belong to the login you started. Run /hum-login <client-id> again."
+  if (redirect.kind === 'error') {
+    await update($, pendingLogin, () => null)
+    return `hum: Spotify login was cancelled (${redirect.error}).`
+  }
+  const reply = await tokenRequest($, {
+    grant_type: 'authorization_code',
+    code: redirect.code,
+    redirect_uri: REDIRECT_URI,
+    client_id: pending.clientId,
+    code_verifier: pending.verifier,
+  })
+  // A temporary failure keeps the login pending, so pasting the address again can finish it.
+  if (!reply.ok && reply.isTemporary) return `hum: couldn't finish the login (${reply.reason}). Paste the address again: /hum-login <address>`
+  await update($, pendingLogin, () => null)
+  if (!reply.ok) return `hum: Spotify refused the login (${reply.reason}).`
+  const auth: Auth = { clientId: pending.clientId, accessToken: reply.accessToken, refreshToken: reply.refreshToken ?? '', expiresAt: reply.expiresAt }
+  await $.store.set('auth', auth)
+  await clearLoginTrouble($)
+  await poll($)
+  return 'hum: logged in to Spotify.'
+}
+
+/**
+ * Runs the node helper, if node is installed, to catch the redirect; false if
+ * it can't. It runs in the background; what happens is shown in the Bar.
+ */
+async function startHelper($: EngineInterface) {
+  if ((await runQuietly($, ['node', '--version'], 5_000))?.exitCode !== 0) return false
+  const helper = $.process.spawn({ argv: ['node', '-e', HELPER_SCRIPT] })
+  void (async () => {
+    let out = ''
+    let outcome: string | null = null
+    try {
+      for await (const piece of helper) {
+        if (piece.stream !== 'stdout') continue
+        out += piece.text
+        // Only whole lines: a piece may end mid-URL.
+        const line = out.split('\n').slice(0, -1).find(l => l.startsWith(REDIRECT_URI))
+        if (line !== undefined) {
+          outcome = await finishLogin($, line)
+          break
+        }
+      }
+    } catch {
+      // The helper couldn't start: reported below.
+    }
+    // Still pending: the helper stopped (port taken, timed out) without a redirect, unless one was pasted.
+    if (outcome === null && (await read($, pendingLogin)) !== null) await update($, nowPlaying, () => idle(HINT_PASTE))
+    else if (outcome !== null && outcome !== 'hum: logged in to Spotify.') await update($, nowPlaying, () => idle(outcome))
+  })()
+  return true
+}
+
+/** Starts a browser login with `clientId`: the helper first, so it's listening before Spotify redirects. */
+async function startLogin($: EngineInterface, clientId: string) {
+  const pending: PendingLogin = { clientId, verifier: randomToken(64), state: randomToken(16) }
+  await update($, pendingLogin, () => pending)
+  const url = authorizeUrl(clientId, await challengeOf(pending.verifier), pending.state)
+  const isListening = await startHelper($)
+  const opened = await openBrowser($, url)
+  const nextStep = isListening
+    ? 'Approve it, and hum finishes on its own.'
+    : `Approve it, then copy the address the browser lands on (it starts with ${REDIRECT_URI}) and run: /hum-login <that address>`
+  return {
+    text: opened
+      ? `hum: opened the Spotify login in your browser. ${nextStep}`
+      : `hum: couldn't open a browser. Open this link to log in:\n${url}\n${nextStep}`,
+  }
+}
+
+/**
+ * /hum-login: with no argument, log in again with the stored client ID (or show
+ * the setup steps the first time); a client ID starts the browser login; a
+ * pasted redirect URL finishes it.
+ */
+async function runLogin($: EngineInterface, args: string) {
+  const given = args.trim()
+  if (given === '') {
+    const stored = (await $.store.get('auth')) as Partial<Auth> | undefined
+    return typeof stored?.clientId === 'string' && isClientId(stored.clientId) ? startLogin($, stored.clientId) : { text: SETUP_STEPS }
+  }
+  if (/^https?:\/\//.test(given)) return { text: await finishLogin($, given) }
+  if (!isClientId(given))
+    return { text: `hum: "${given}" doesn't look like a Spotify client ID (32 letters and digits). Run /hum-login for the steps.` }
+  return startLogin($, given)
+}
+
+/** /hum-logout: forget the login (client ID and tokens). */
+async function runLogout($: EngineInterface) {
+  const wasLoggedIn = (await storedAuth($)) !== null || (await read($, pendingLogin)) !== null
+  await $.store.delete('auth')
+  await update($, pendingLogin, () => null)
+  await clearLoginTrouble($)
+  await update($, mutedFrom, () => null)
+  await poll($)
+  return { text: wasLoggedIn ? 'hum: logged out of Spotify.' : 'hum: not logged in.' }
+}
+
 /** The chosen Look: this session's, else the one saved by an earlier session. */
 async function chosenStyle($: EngineInterface): Promise<Style> {
   const { value } = await $.state.get(styleRef)
@@ -188,6 +411,15 @@ export const register: Register = on => {
       argumentHint: '[glossy|minimal|glass]',
     })
     await $.command.register({
+      name: 'hum-login',
+      description: 'Log in to Spotify with your own Developer app (run with no argument for the steps)',
+      argumentHint: '[client-id | pasted redirect URL]',
+    })
+    await $.command.register({
+      name: 'hum-logout',
+      description: 'Forget your Spotify login (client ID and tokens)',
+    })
+    await $.command.register({
       name: 'hum-demo',
       description: 'Toggle hum Demo mode (a fake Spotify); no-device / no-volume simulate those cases',
       argumentHint: '[no-device|no-volume]',
@@ -199,6 +431,8 @@ export const register: Register = on => {
 
   on('command.run', { command: 'hum-style' }, async ($, e) => runStyle($, e.args ?? ''))
   on('command.run', { command: 'hum-demo' }, async ($, e) => runDemo($, e.args ?? ''))
+  on('command.run', { command: 'hum-login' }, async ($, e) => runLogin($, e.args ?? ''))
+  on('command.run', { command: 'hum-logout' }, async $ => runLogout($))
 
   on('ui.render', { component: 'PromptHint' }, async ($, e) => drawUnderPrompt($, e as never, e.viewport?.columns ?? 80))
 
