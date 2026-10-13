@@ -2,10 +2,8 @@
 
 A Spotify player bar inside [Claude Code](https://claude.com/claude-code). hum draws the track that's playing, with clickable controls, in the space under Claude Code's prompt. You can skip a song without leaving the terminal.
 
-```
-                          Muddy Feet (feat Sia) · Miley Cyrus, Sia
-  ◀◀  ❚❚  ▶▶   ━━━━━━━━╸────────   -1:14   ⇄  ◁))  ↻
-```
+<img width="1683" height="128" alt="Hum ss" src="https://github.com/user-attachments/assets/8ca33059-49fd-4353-8fff-cea84c063503" />
+
 
 > **Status: work in progress.** The Bar, its three Looks and the Spotify Web API client are built. Logging in to Spotify (`/hum-login`) is the next piece, so for now you can try hum with **Demo mode**, a fake Spotify built into hum. See [Roadmap](#roadmap).
 
