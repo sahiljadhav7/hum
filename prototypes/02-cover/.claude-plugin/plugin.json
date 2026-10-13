@@ -1,0 +1,6 @@
+{
+  "name": "hum-cover-proto",
+  "version": "0.1.0",
+  "description": "PROTOTYPE (throwaway): fetch a Spotify Cover JPEG, decode it in pure JS, draw it as an Image and as half-block Rasters",
+  "types": "./types/index.d.ts"
+}

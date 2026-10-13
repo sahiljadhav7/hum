@@ -14,7 +14,7 @@ A Spotify player bar inside [Claude Code](https://claude.com/claude-code). hum d
 - **Volume icon**: shows the level; click it to mute and unmute.
 - **Title and artist** of the track or podcast episode.
 - **Three Looks**: **Glossy** (default, a two-tone capsule), **Minimal** (no background) and **Glass** (a three-row capsule with an inset card). Switch with `/hum-style`.
-- **Cover**: a real picture in terminals that can draw images (kitty, Ghostty).
+- **Cover**: a real picture in terminals that can draw images (kitty, Ghostty), and a 2-cell half-block version elsewhere (issue 05).
 - It controls whichever **Spotify Connect device** is playing: the desktop app, a phone or a speaker.
 
 ## Requirements
@@ -85,7 +85,7 @@ A `/plugin install` line comes later, when hum is packaged for sharing.
 | 01 | The Bar, its Looks, `/hum-style` | Done |
 | 02 | Spotify Web API client, Demo mode | Done |
 | 03 | `/hum-login` and `/hum-logout` | Done |
-| 04 | Prototype: decoding real album art | Planned |
+| 04 | Prototype: decoding the Cover | Done |
 | 05 | Real Cover in the Bar | Planned |
 | 06 | `/hum-playlist` | Planned |
 | 07 | Package for `/plugin install` | Planned |
