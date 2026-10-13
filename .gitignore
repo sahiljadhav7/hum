@@ -1,0 +1,13 @@
+# Agent skills installed locally with `npx skills` (tooling, not part of hum)
+.agents/
+.claude/skills/
+skills-lock.json
+
+# Personal Claude Code settings
+.claude/settings.local.json
+
+# Type files Claude Code writes beside a plugin it loads
+.claude-plugin/types/
+**/.claude-plugin/types/
+
+node_modules/

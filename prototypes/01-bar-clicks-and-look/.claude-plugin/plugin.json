@@ -1,0 +1,6 @@
+{
+  "name": "hum-proto",
+  "version": "0.1.0",
+  "description": "PROTOTYPE (throwaway): does the row under the prompt / band above it take clicks and drags for a fake Spotify Bar?",
+  "types": "./types/index.d.ts"
+}
