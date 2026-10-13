@@ -29,7 +29,11 @@ This document replaces the tmux, standalone, and title/artist plan in `idea.md`.
 
 - **Web API only**: hum controls whichever Device is active, including a phone or a speaker.
 - Each user creates their own **Developer app** with the redirect URI `http://127.0.0.1:8898/callback`. Premium is required, because the app owner must have it, so free accounts can't use hum.
-- hum polls Now playing every 3–5 s and moves the Seek bar locally between polls. It polls again right after every action.
+- hum polls Now playing every 4 s and polls again right after every action. Between polls the Seek bar moves on locally: each redraw places it from the time of the last poll, and between redraws it ticks forward once a second by itself.
+- Podcasts: the poll asks for episodes too (`additional_types=episode`) and shows the episode and its show. During an ad the Bar says `hum: ad playing`; with a Device but nothing playing, `hum: nothing playing`.
+- An error reply (5xx, 403...) keeps the last Now playing rather than claiming there's no Device.
+- After a `429`, hum sends nothing until `Retry-After` has passed. A `401` shows `hum: run /hum-login`, and the refused token isn't sent again (issue 03 refreshes it there first).
+- Before `/hum-login` (and with Demo mode off), the Bar is the Idle hint `hum: run /hum-login`.
 - Tokens persist across sessions.
 
 ## Commands
@@ -40,7 +44,7 @@ This document replaces the tmux, standalone, and title/artist plan in `idea.md`.
 | `/hum-logout` | Forgets the stored tokens. |
 | `/hum-playlist` | Opens a pane listing the user's playlists, then the chosen playlist's tracks. Picking a track plays it on the Active device. |
 | `/hum-style` | Switches the look: Glossy (default), Minimal or Glass. With no argument it shows the choices; the choice is remembered across sessions. |
-| `/hum-demo` | Turns Demo mode on or off for the session. A fake Web API inside hum answers the real client code's calls with canned responses. |
+| `/hum-demo` | Turns Demo mode on or off for the session. A fake Web API inside hum answers the real client's requests in Spotify's own JSON, so the client and its parser run end to end. `/hum-demo no-device` and `/hum-demo no-volume` toggle simulations of no Active device and of a Device without remote volume (they turn Demo mode on). |
 
 ## Open risk, checked first: **answered, clicks work** (2026-10-13)
 

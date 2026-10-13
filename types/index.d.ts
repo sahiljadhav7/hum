@@ -1,12 +1,42 @@
-// hum's state contract: the values it keeps in `$.state`.
+// hum's state contract: the values it keeps in `$.state`, and the types they
+// are made of. Self-contained (no imports), as the engine requires.
 
-/** One of the Bar's looks (see DESIGN.md). */
+/** One of the Bar's Looks (see DESIGN.md). */
 export type Style = 'glossy' | 'minimal' | 'glass'
 
 export type Repeat = 'off' | 'context' | 'track'
 
-/** The fake player's state (Demo mode until the Web API backend lands). */
-export type FakeState = {
+export type Track = {
+  title: string
+  /** The track's artists, joined with ", ". */
+  artist: string
+  durationMs: number
+  /** Placeholder Cover colors (0xRRGGBB, a gradient) until the real Cover (issue 05). */
+  cover: [number, number]
+  /** The album image Spotify gives, when there is one. */
+  coverUrl?: string
+}
+
+/** Now playing: what the Bar draws, as of the last poll. */
+export type NowPlaying =
+  | { kind: 'idle'; hint: string }
+  | {
+      kind: 'playing'
+      track: Track
+      isPlaying: boolean
+      /** Position at `at` (ms since epoch); advances with the clock while playing. */
+      positionMs: number
+      at: number
+      isShuffle: boolean
+      repeat: Repeat
+      /** 0 to 1. */
+      volume: number
+      /** False when the Active device doesn't allow remote volume. */
+      canSetVolume: boolean
+    }
+
+/** Demo mode's fake Spotify: the state behind its Web API answers. */
+export type DemoPlayer = {
   track: number
   isPlaying: boolean
   /** Position at `anchoredAt`; while playing, it advances with the clock. */
@@ -14,17 +44,28 @@ export type FakeState = {
   anchoredAt: number
   isShuffle: boolean
   repeat: Repeat
-  volume: number
-  /** The volume to restore on unmute; null when not muted. */
-  mutedFrom: number | null
-  /** False simulates "no Active device" (the Idle state). */
+  /** 0 to 100, as Spotify reports it. */
+  volumePercent: number
+  /** False simulates "no Active device" (`/hum-demo no-device`). */
   hasDevice: boolean
-  /** False simulates a Device that doesn't allow remote volume. */
+  /** False simulates a Device that doesn't allow remote volume (`/hum-demo no-volume`). */
   canSetVolume: boolean
 }
 
 declare module 'claude-code' {
   interface PluginState {
-    hum: { player: FakeState; style: Style }
+    hum: {
+      /** Now playing, as of the last poll. */
+      nowPlaying: NowPlaying
+      /** Demo mode: on or off for this session, and its fake player. */
+      demo: { isOn: boolean; player: DemoPlayer }
+      /** No request to Spotify before this time (ms since epoch), after a 429. */
+      backoffUntil: number
+      /** The volume (0 to 1) to restore on unmute; null when not muted. */
+      mutedFrom: number | null
+      /** An access token Spotify refused (401); not sent again. */
+      refusedToken: string | null
+      style: Style
+    }
   }
 }

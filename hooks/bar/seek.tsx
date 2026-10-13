@@ -1,6 +1,6 @@
-// The Seek bar, as a Client surface module: it gets raw pointer events
-// with a column (click to seek) and ticks the countdown locally once a second,
-// between the player's polls.
+// The Seek bar, as a Client surface module: it gets raw pointer events with a
+// column (click to seek) and moves on by itself once a second between polls,
+// counting its own frame-clock ticks (not the wall clock, so tests can drive it).
 import type { ClientModule } from 'claude-code'
 
 import { countdown } from './look'
@@ -20,7 +20,7 @@ export type SeekProps = {
   bg?: string
 }
 
-type State = { stamp: string; at: number; isDown: boolean; tick: number }
+type State = { stamp: string; isDown: boolean; tick: number }
 
 const clamp = (n: number) => Math.max(0, Math.min(1, n))
 
@@ -36,11 +36,11 @@ const Seek: ClientModule<SeekProps, State> = (props, surface) => {
         if (s) surface.setState({ ...s, tick: s.tick + 1 })
       })
     }
-    surface.setState({ stamp, at: Date.now(), isDown: state?.isDown ?? false, tick: 0 })
+    surface.setState({ stamp, isDown: state?.isDown ?? false, tick: 0 })
   }
 
-  const since = state?.stamp === stamp ? state.at : Date.now()
-  const elapsed = props.isPlaying ? Date.now() - since : 0
+  // Seconds since these props arrived (a new poll resets it).
+  const elapsed = props.isPlaying && state?.stamp === stamp ? state.tick * 1000 : 0
   const position = Math.min(props.durationMs, props.positionMs + elapsed)
   const fraction = props.durationMs > 0 ? clamp(position / props.durationMs) : 0
 

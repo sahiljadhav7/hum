@@ -3,33 +3,11 @@
 // store and environment mocked.
 import { expect, mock, test } from 'claude-code/testing'
 
-const under = (columns = 100) => ({
-  component: 'PromptHint',
-  props: { isDraft: false, isWorking: false, hint: '? for shortcuts' },
-  viewport: { columns, rows: 24, isFullscreen: true },
-})
-
-/** The world beneath the plugins: a clock at 1 s, this environment, an empty store (unless given). */
-function setup(on: any, env: Record<string, string> = {}, store: Record<string, unknown> = {}) {
-  const clock = mock.clock(on, { now: 1_000 })
-  mock.env(on, env)
-  mock.store(on, store)
-  return clock
-}
-
-/** Starts a session, answering beneath the plugins as the engine would. */
-async function startSession($: any, on: any) {
-  on('session.start', (_$: unknown, e: { cwd: string }) => ({ cwd: e.cwd }))
-  on('command.register', () => ({ value: {} }))
-  await $.session.start({ cwd: '/tmp', surface: 'terminal' })
-}
-
-async function bar($: any, columns = 100) {
-  return (await $.ui.mount({ plugin: 'hum', surface: 'terminal', ...under(columns) })) as any
-}
+import { bar, countdownOf, demo, lineCells, setup, startSession, style, under } from './helpers'
 
 test('the Bar draws under the prompt with the track and its artist', async ($, on) => {
   setup(on, {})
+  await demo($)
   const ui = await bar($)
   expect(await ui.find({ type: 'Text', text: /Muddy Feet \(feat Sia\)/ })).toBeDefined()
   expect(await ui.find({ type: 'Text', text: /Miley Cyrus, Sia/ })).toBeDefined()
@@ -37,11 +15,9 @@ test('the Bar draws under the prompt with the track and its artist', async ($, o
   await ui.unmount()
 })
 
-const seekTexts = async (ui: any) => (await ui.findAll({ type: 'Text', in: 'seek' })).map((t: any) => t.text as string)
-const countdownOf = async (ui: any) => (await seekTexts(ui)).find((t: string) => /-\d+:\d\d/.test(t))?.trim()
-
 test('play/pause flips between ❚❚ and ▶ and freezes the countdown', async ($, on) => {
   const clock = setup(on, {})
+  await demo($)
   const ui = await bar($)
   expect(await ui.find({ type: 'Text', text: '❚❚' })).toBeDefined()
   await ui.press({ key: 'play' })
@@ -54,6 +30,7 @@ test('play/pause flips between ❚❚ and ▶ and freezes the countdown', async 
 
 test('next and previous move between tracks; previous after 3 s restarts the track', async ($, on) => {
   const clock = setup(on, {})
+  await demo($)
   const ui = await bar($)
   await ui.press({ key: 'next' })
   expect(await ui.find({ type: 'Text', text: /Flowers/ })).toBeDefined()
@@ -68,6 +45,7 @@ test('next and previous move between tracks; previous after 3 s restarts the tra
 
 test('clicking the Seek bar seeks there', async ($, on) => {
   setup(on, {})
+  await demo($)
   const ui = await bar($) // 100 columns: a 24-cell line
   await ui.pointer({ type: 'down', x: 11, y: 0, button: 'left', in: 'seek' })
   await ui.pointer({ type: 'up', x: 11, y: 0, button: 'left', in: 'seek' })
@@ -78,6 +56,7 @@ test('clicking the Seek bar seeks there', async ($, on) => {
 
 test('the speaker mutes, then restores the volume', async ($, on) => {
   setup(on, {})
+  await demo($)
   const ui = await bar($)
   expect(await ui.find({ type: 'Text', text: '◁))' })).toBeDefined()
   await ui.press({ key: 'volume' })
@@ -89,6 +68,7 @@ test('the speaker mutes, then restores the volume', async ($, on) => {
 
 test('shuffle and repeat show when on (bold + underline); repeat cycles off, all, one', async ($, on) => {
   setup(on, {})
+  await demo($)
   const ui = await bar($)
   const style = async (key: string) => (await ui.find({ key }))?.children?.[0]?.props ?? {}
   expect((await style('shuffle')).underline).toBeUndefined()
@@ -106,6 +86,7 @@ test('shuffle and repeat show when on (bold + underline); repeat cycles off, all
 
 test('narrow: the right-hand icons drop first, the controls stay', async ($, on) => {
   setup(on, {})
+  await demo($)
   const ui = await bar($, 38)
   expect(await ui.find({ key: 'play' })).toBeDefined()
   expect(await ui.find({ key: 'shuffle' })).toBeUndefined()
@@ -114,6 +95,7 @@ test('narrow: the right-hand icons drop first, the controls stay', async ($, on)
 
 test('Glossy without truecolor uses exact 256-color greys; with truecolor, warm browns', async ($, on) => {
   setup(on, {})
+  await demo($)
   const ui = await bar($)
   const tree = JSON.stringify(await ui.drawn())
   expect(tree).toContain('#585858')
@@ -124,6 +106,7 @@ test('Glossy without truecolor uses exact 256-color greys; with truecolor, warm 
 
 test('Glossy with truecolor is the warm two-tone capsule, square ends in Windows Terminal', async ($, on) => {
   setup(on, { COLORTERM: 'truecolor' })
+  await demo($)
   const ui = await bar($)
   const tree = JSON.stringify(await ui.drawn())
   expect(tree).toContain('#7A695B')
@@ -134,6 +117,7 @@ test('Glossy with truecolor is the warm two-tone capsule, square ends in Windows
 
 test('in kitty the capsule ends and the Cover are pictures; not through tmux', async ($, on) => {
   setup(on, { TERM: 'xterm-kitty', KITTY_WINDOW_ID: '1', COLORTERM: 'truecolor' })
+  await demo($)
   const ui = await bar($)
   expect((await ui.find({ key: 'cap-l' }))?.type).toBe('Image')
   expect((await ui.find({ key: 'cap-r' }))?.type).toBe('Image')
@@ -143,6 +127,7 @@ test('in kitty the capsule ends and the Cover are pictures; not through tmux', a
 
 test('through tmux there are no pictures, even in kitty', async ($, on) => {
   setup(on, { TERM: 'xterm-kitty', KITTY_WINDOW_ID: '1', TMUX: '/tmp/tmux-1000/default,1,0' })
+  await demo($)
   const ui = await bar($)
   expect(await ui.find({ type: 'Image' })).toBeUndefined()
   await ui.unmount()
@@ -150,6 +135,7 @@ test('through tmux there are no pictures, even in kitty', async ($, on) => {
 
 test('NO_COLOR draws no colors at all', async ($, on) => {
   setup(on, { NO_COLOR: '1', COLORTERM: 'truecolor' })
+  await demo($)
   const ui = await bar($)
   const tree = JSON.stringify(await ui.drawn())
   expect(tree).not.toContain('"color"')
@@ -158,13 +144,11 @@ test('NO_COLOR draws no colors at all', async ($, on) => {
   await ui.unmount()
 })
 
-const style = async ($: any, args: string) =>
-  ((await $.command.run({ command: 'hum-style', args })) as { text: string }).text
-
 test('/hum-style glass switches to the Glass look', async ($, on) => {
   setup(on, {})
   await startSession($, on)
   expect(await style($, 'glass')).toMatch(/Glass/)
+  await demo($)
   const ui = await bar($)
   expect(await ui.find({ key: 'card' })).toBeDefined() // Glass's inset card
   await ui.unmount()
@@ -185,6 +169,7 @@ test('/hum-style rejects an unknown look and keeps the current one', async ($, o
 
 test('the look chosen in an earlier session is used', async ($, on) => {
   setup(on, {}, { style: 'minimal' })
+  await demo($)
   const ui = await bar($)
   // Minimal paints no background anywhere.
   expect(JSON.stringify(await ui.drawn())).not.toContain('backgroundColor')
@@ -210,8 +195,9 @@ test('/hum-style saves the look for later sessions', async ($, on) => {
 test('when a track ends, the next one plays', async ($, on) => {
   const clock = setup(on)
   await startSession($, on)
+  await demo($)
   const ui = await bar($)
-  await clock.advance(230_000) // Muddy Feet is 3:49
+  await clock.advance(234_000) // Muddy Feet is 3:49; hum sees the change at its next 4 s poll
   expect(await ui.find({ type: 'Text', text: /Flowers/ })).toBeDefined()
   expect(await ui.find({ type: 'Text', text: '❚❚' })).toBeDefined()
   await ui.unmount()
@@ -222,6 +208,7 @@ test('a new session starts the first track from the beginning, whatever the time
   mock.env(on, {})
   mock.store(on)
   await startSession($, on)
+  await demo($)
   const ui = await bar($)
   expect(await ui.find({ type: 'Text', text: /Muddy Feet/ })).toBeDefined()
   expect(await countdownOf(ui)).toBe('-3:49')
@@ -231,10 +218,11 @@ test('a new session starts the first track from the beginning, whatever the time
 test('with repeat one, a finished track plays again', async ($, on) => {
   const clock = setup(on)
   await startSession($, on)
+  await demo($)
   const ui = await bar($)
   await ui.press({ key: 'repeat' }) // all
   await ui.press({ key: 'repeat' }) // one
-  await clock.advance(230_000)
+  await clock.advance(234_000) // past the end, and the next 4 s poll
   expect(await ui.find({ type: 'Text', text: /Muddy Feet/ })).toBeDefined()
   expect(await countdownOf(ui)).toMatch(/^-3:4\d$/)
   await ui.unmount()
@@ -243,6 +231,7 @@ test('with repeat one, a finished track plays again', async ($, on) => {
 test('with repeat off, playback stops after the last track', async ($, on) => {
   const clock = setup(on)
   await startSession($, on)
+  await demo($)
   const ui = await bar($)
   await ui.press({ key: 'next' })
   await ui.press({ key: 'next' }) // Midnight City, 4:03, the last track
@@ -254,6 +243,7 @@ test('with repeat off, playback stops after the last track', async ($, on) => {
 
 test('Glass in Windows Terminal: flat capsule, an inset card, no pictures or stair-step ends', async ($, on) => {
   setup(on, {}, { style: 'glass' })
+  await demo($)
   const ui = await bar($)
   expect(await ui.find({ key: 'card' })).toBeDefined()
   expect(await ui.find({ type: 'Text', text: /Miley Cyrus, Sia/ })).toBeDefined()
@@ -269,6 +259,7 @@ test('Glass in Windows Terminal: flat capsule, an inset card, no pictures or sta
 
 test('Glass in kitty: smooth picture ends and a picture Cover', async ($, on) => {
   setup(on, { TERM: 'xterm-kitty', KITTY_WINDOW_ID: '1', COLORTERM: 'truecolor' }, { style: 'glass' })
+  await demo($)
   const ui = await bar($)
   expect((await ui.find({ key: 'cap-l' }))?.type).toBe('Image')
   expect((await ui.find({ key: 'cover' }))?.type).toBe('Image')
@@ -278,6 +269,7 @@ test('Glass in kitty: smooth picture ends and a picture Cover', async ($, on) =>
 for (const look of ['glossy', 'minimal', 'glass']) {
   test(`${look}: controls keep working at a narrow width`, async ($, on) => {
     setup(on, {}, { style: look })
+    await demo($)
     const ui = await bar($, 38)
     await ui.press({ key: 'next' })
     expect(await ui.find({ type: 'Text', text: /Flowers/ })).toBeDefined()
@@ -288,18 +280,17 @@ for (const look of ['glossy', 'minimal', 'glass']) {
 
 test('the Bar stays while Claude is working', async ($, on) => {
   setup(on)
+  await demo($)
   const working = { ...under(), props: { isDraft: false, isWorking: true, hint: 'esc to interrupt' } }
   const ui = (await $.ui.mount({ plugin: 'hum', surface: 'terminal', ...working } as never)) as any
   expect(await ui.find({ key: 'play' })).toBeDefined()
   await ui.unmount()
 })
 
-const lineCells = async (ui: any) =>
-  (await seekTexts(ui)).filter((t: string) => /^[━╸─▁]$/.test(t)).length
-
 test('Glossy: the icons drop before the Seek bar shrinks', async ($, on) => {
   setup(on)
   // Glossy in Windows Terminal needs 63 columns for icons plus a full 24-cell Seek bar.
+  await demo($)
   let ui = await bar($, 63)
   expect(await ui.find({ key: 'shuffle' })).toBeDefined()
   expect(await lineCells(ui)).toBe(24)
@@ -313,6 +304,7 @@ test('Glossy: the icons drop before the Seek bar shrinks', async ($, on) => {
 test('Glass: the icons drop before the title area shrinks', async ($, on) => {
   setup(on, {}, { style: 'glass' })
   // Glass in Windows Terminal needs 72 columns for icons plus a full 30-cell title area.
+  await demo($)
   let ui = await bar($, 72)
   expect(await ui.find({ key: 'shuffle' })).toBeDefined()
   expect(await lineCells(ui)).toBe(35) // the card's line spans the Cover and title: 5 + 30
@@ -325,6 +317,7 @@ test('Glass: the icons drop before the title area shrinks', async ($, on) => {
 
 test('clicking the countdown does not seek', async ($, on) => {
   setup(on)
+  await demo($)
   const ui = await bar($) // a 24-cell Seek bar; the countdown starts at cell 24
   await ui.pointer({ type: 'down', x: 26, y: 0, button: 'left', in: 'seek' })
   await ui.pointer({ type: 'up', x: 26, y: 0, button: 'left', in: 'seek' })
@@ -334,6 +327,7 @@ test('clicking the countdown does not seek', async ($, on) => {
 
 test('NO_COLOR in kitty draws no picture either', async ($, on) => {
   setup(on, { NO_COLOR: '1', TERM: 'xterm-kitty', KITTY_WINDOW_ID: '1', COLORTERM: 'truecolor' })
+  await demo($)
   const ui = await bar($)
   expect(await ui.find({ type: 'Image' })).toBeUndefined()
   await ui.unmount()

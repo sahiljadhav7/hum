@@ -13,4 +13,4 @@ hum controls playback only through the Spotify Web API (OAuth PKCE), with no loc
 - First-time setup walks the user through creating a Developer app and pasting its client ID before the OAuth login.
 - Without an Active device, hum shows the Idle state.
 - To respect rate limits, Now playing is polled every few seconds and progress is interpolated locally in between.
-- Demo mode answers Web API calls from canned responses inside hum, so the real API client code still runs.
+- Demo mode is a fake Web API inside hum: it keeps playback state and answers the real client's requests in Spotify's own JSON, so the client and its parser run end to end without an account.

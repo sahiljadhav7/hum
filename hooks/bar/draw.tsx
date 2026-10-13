@@ -3,7 +3,8 @@
 // never leaves register.tsx (the engine requires that).
 import type { Style } from '../../types'
 import { positionAt } from '../player'
-import type { Command, NowPlaying, Playing } from '../player'
+import type { NowPlaying } from '../../types'
+import type { Command, Playing } from '../player'
 import { cells, fit, GLASS, GLOSSY, MINIMAL_INK, toHex, mix, volumeGlyph } from './look'
 import type { Ink } from './look'
 import { capPixels, CELL_H, CELL_W, coverPixels } from './pixels'
