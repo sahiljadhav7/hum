@@ -116,7 +116,7 @@ The tui-design review lessons still apply to the remaining looks: theme colors o
 
 hum shows no Cover (album image) in any terminal ([ADR 0004](docs/adr/0004-drop-the-cover.md)). Claude Code's plugin `Image` draws real pixels only in kitty and Ghostty. Everywhere else, Windows Terminal included, a Cover can only be colored text cells. The user saw the real covers drawn that way (issue 05) and found them "just colored blocks", so the whole Cover was dropped, kitty included, and so was the earlier placeholder.
 
-What issue 04 learned, kept in case the Cover returns (the issue 04 Answer; the prototype is in git history at 772078c):
+What issue 04 learned, kept in case the Cover returns (the issue 04 Answer; the prototype is in git history at ad7011b):
 - `$.http.fetch` returns the body as UTF-8 text and destroys a JPEG. The bytes came through `curl -o <file>` and `$.fs.read(file, { as: 'bytes' })` ([ADR 0003](docs/adr/0003-cover-bytes-through-curl.md), now superseded).
 - jpeg-js, vendored, decodes a 64 px cover in about 1 ms inside the engine. Call it with `{ useTArray: true }`.
 
