@@ -41,6 +41,8 @@ const PICKER_PANE = 'hum-playlist'
 // The latest poll; an older one that answers late doesn't overwrite it.
 // (A module variable: a reload starts it over, which is harmless.)
 let latestPoll = 0
+// The latest playlist opened in the Playlist picker; a slower, older open doesn't overwrite it.
+let latestOpen = 0
 
 // The refresh in flight, if any: concurrent requests share it rather than each
 // spending the same refresh token (which Spotify may rotate). Module variable.
@@ -247,7 +249,9 @@ async function runPlaylist($: EngineInterface) {
 }
 
 async function openPlaylist($: EngineInterface, playlist: PlaylistRow) {
+  const open = ++latestOpen
   const reply = await api($, itemsCall(playlist.id, 0))
+  if (open !== latestOpen) return
   const tracks = parseItems(reply)
   await update($, picker, p =>
     tracks === null

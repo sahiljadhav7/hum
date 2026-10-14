@@ -310,3 +310,32 @@ test("a page that arrives after another playlist was opened isn't added to it", 
   expect(await ui.find({ type: 'Text', text: /Song 5\d/ })).toBeUndefined()
   await ui.unmount()
 })
+
+test('opening B while A is still loading shows B, whichever answers last', async ($, on) => {
+  setup(on, {}, LOGGED_IN)
+  let release = () => {}
+  const held = new Promise<void>(r => (release = r))
+  on('http.fetch', async (_$: unknown, e: { url: string }) => {
+    const path = new URL(e.url).pathname.replace('/v1', '')
+    const reply = (body: unknown) => ({ value: { status: 200, ok: true, headers: {}, text: JSON.stringify(body) } })
+    if (path === '/me') return reply(ME)
+    if (path === '/me/playlists') return reply(page(path, [playlist('p-a', 'A', 'sahil', 1), playlist('p-b', 'B', 'sahil', 1)], 0, 2))
+    if (path === '/playlists/p-a/items') {
+      await held // A is slow
+      return reply(page(path, [entry('From A', ['Band A'])], 0, 1))
+    }
+    if (path === '/playlists/p-b/items') return reply(page(path, [entry('From B', ['Band B'])], 0, 1))
+    return reply(playerBody())
+  })
+  panes(on)
+  await startSession($, on)
+  await run($, 'hum-playlist')
+  const ui = await pane($)
+  const a = ui.press({ key: 'playlist:p-a' })
+  await ui.press({ key: 'playlist:p-b' })
+  release()
+  await a
+  expect(await ui.find({ type: 'Text', text: /From B/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /From A/ })).toBeUndefined()
+  await ui.unmount()
+})
