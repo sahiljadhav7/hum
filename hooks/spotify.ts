@@ -60,6 +60,7 @@ type PlayerJson = {
   device?: { volume_percent?: number | null; supports_volume?: boolean } | null
   item?: {
     id?: string
+    uri?: string
     type?: string
     name?: string
     duration_ms?: number
@@ -98,6 +99,7 @@ export function parsePlayer(status: number, text: string, at: number): NowPlayin
   return {
     kind: 'playing',
     track: {
+      uri: item.uri ?? '',
       title: item.name ?? '',
       artist: isEpisode
         ? (item.show?.name ?? '')
@@ -129,7 +131,8 @@ export const playlistsCall = (offset: number): ApiCall => ({
 export const itemsCall = (playlistId: string, offset: number): ApiCall => ({
   method: 'GET',
   path: `/playlists/${encodeURIComponent(playlistId)}/items`,
-  query: { limit: String(PAGE_SIZE), offset: String(offset) },
+  // Without it Spotify sends no item for a podcast episode in the playlist.
+  query: { limit: String(PAGE_SIZE), offset: String(offset), additional_types: 'episode' },
 })
 
 /** Plays the playlist from the entry at `position` (zero-based), so next and previous follow it. */
@@ -171,11 +174,15 @@ export function parsePlaylists(reply: Reply | null, userId: string): Page<Playli
   return { rows, next: nextOffset(json) }
 }
 
-type EntryJson = { item?: { name?: string; artists?: { name?: string }[]; show?: { name?: string } } | null }
+type EntryJson = {
+  is_local?: boolean
+  item?: { uri?: string; name?: string; duration_ms?: number; artists?: { name?: string }[]; show?: { name?: string } } | null
+}
 
 /**
  * A page of `GET /v1/playlists/{id}/items`. An entry with no item (no longer
- * available) gets no row; each row keeps its position in the playlist.
+ * available) or a local file (Spotify can't start one remotely) gets no row;
+ * each row keeps its position in the playlist.
  */
 export function parseItems(reply: Reply | null): Page<TrackRow> | null {
   const json = reply === null ? null : parseJson<PageJson<EntryJson | null>>(reply.status, reply.text)
@@ -183,9 +190,9 @@ export function parseItems(reply: Reply | null): Page<TrackRow> | null {
   const start = json.offset ?? 0
   const rows = (json.items ?? []).flatMap((e, i) => {
     const item = e?.item
-    if (item === null || item === undefined) return []
+    if (item === null || item === undefined || e?.is_local === true) return []
     const artist = item.artists !== undefined ? item.artists.map(a => a.name ?? '').filter(n => n !== '').join(', ') : (item.show?.name ?? '')
-    return [{ position: start + i, title: item.name ?? '', artist }]
+    return [{ position: start + i, uri: item.uri ?? '', title: item.name ?? '', artist, durationMs: item.duration_ms ?? 0 }]
   })
   return { rows, next: nextOffset(json) }
 }

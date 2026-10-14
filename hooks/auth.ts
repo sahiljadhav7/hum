@@ -57,7 +57,7 @@ export function authorizeUrl(clientId: string, challenge: string, state: string)
 }
 
 export const SETUP_STEPS = [
-  'hum logs in with your own Spotify Developer app (Spotify Premium needed). One-time setup:',
+  'log in with your own Spotify Developer app (Spotify Premium needed). One-time setup:',
   `  1. Open ${DASHBOARD_URL} and create an app (any name and description).`,
   `  2. Under Redirect URIs, add exactly: ${REDIRECT_URI}`,
   '  3. Under "Which API/SDKs are you planning to use?", tick Web API. Save.',

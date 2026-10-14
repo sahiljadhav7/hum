@@ -88,6 +88,7 @@ A `/plugin install` line comes later, when hum is packaged for sharing.
 | 05 | Real Cover in the Bar | Dropped ([ADR 0004](docs/adr/0004-drop-the-cover.md)) |
 | 06 | `/hum-playlist` | Done |
 | 07 | Package for `/plugin install` | Planned |
+| 08 | Playlist picker as a Card and Table; command reply fixes | Done |
 
 The issues live in [`.scratch/hum/issues/`](.scratch/hum/issues/).
 

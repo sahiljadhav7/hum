@@ -56,13 +56,30 @@ export const GLASS = {
   },
 }
 
-/** Terminal cells a string takes; every glyph hum draws is one cell wide. */
-export const cells = (text: string) => [...text].length
+// East Asian wide characters: Hangul, CJK, kana, fullwidth forms.
+const WIDE = /[\u1100-\u115F\u2E80-\u303E\u3041-\u33FF\u3400-\u4DBF\u4E00-\u9FFF\uA000-\uA4CF\uAC00-\uD7A3\uF900-\uFAFF\uFE30-\uFE4F\uFF00-\uFF60\uFFE0-\uFFE6\u{20000}-\u{3FFFD}]/u
+const EMOJI = /\p{Emoji_Presentation}|\p{Extended_Pictographic}\uFE0F/u
+const ZERO = /^[\p{Mark}\u200B-\u200D\uFEFF]*$/u
+const graphemes = new Intl.Segmenter(undefined, { granularity: 'grapheme' })
+
+/** Columns one grapheme takes: 2 for emoji and wide characters, 0 for marks and joiners. */
+const columns = (g: string) => (EMOJI.test(g) || WIDE.test(g) ? 2 : ZERO.test(g) ? 0 : 1)
+
+/** Terminal cells a string takes (track and playlist names can hold emoji and CJK). */
+export const cells = (text: string) => [...graphemes.segment(text)].reduce((sum, { segment }) => sum + columns(segment), 0)
 
 /** `text` cut to `width` cells with an ellipsis. */
 export const fit = (text: string, width: number) => {
-  const chars = [...text]
-  return chars.length > width ? chars.slice(0, Math.max(0, width - 1)).join('') + '…' : text
+  if (cells(text) <= width) return text
+  let out = ''
+  let used = 0
+  for (const { segment } of graphemes.segment(text)) {
+    const w = columns(segment)
+    if (used + w > width - 1) break
+    out += segment
+    used += w
+  }
+  return width <= 0 ? '' : out + '…'
 }
 
 /** A fixed 7-cell countdown, so nothing shifts when it changes length. */

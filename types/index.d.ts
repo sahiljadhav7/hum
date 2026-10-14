@@ -7,6 +7,8 @@ export type Style = 'glossy' | 'minimal' | 'glass'
 export type Repeat = 'off' | 'context' | 'track'
 
 export type Track = {
+  /** Spotify's URI for it, e.g. `spotify:track:…`. */
+  uri: string
   title: string
   /** The track's artists, joined with ", ". */
   artist: string
@@ -55,7 +57,7 @@ export type Page<R> = { rows: R[]; next: number | null }
 export type PlaylistRow = { id: string; name: string; uri: string; total: number }
 
 /** A track in a playlist; `position` is its place in the playlist, from 0. */
-export type TrackRow = { position: number; title: string; artist: string }
+export type TrackRow = { position: number; uri: string; title: string; artist: string; durationMs: number }
 
 /** The Playlist picker (/hum-playlist): the playlists, the one opened, and a line to show above them. */
 export type Picker = {

@@ -67,6 +67,7 @@ export function spotify(on: any, answer: (req: Sent) => { status: number; body?:
 
 /** A `GET /v1/me/player` body, as Spotify sends it. */
 export function playerBody(over: Partial<{
+  uri: string
   name: string
   artists: string[]
   durationMs: number
@@ -78,7 +79,7 @@ export function playerBody(over: Partial<{
   supportsVolume: boolean
 }> = {}) {
   const o = {
-    name: 'Espresso', artists: ['Sabrina Carpenter'], durationMs: 175_000, progressMs: 60_000, isPlaying: true,
+    uri: 'spotify:track:t1', name: 'Espresso', artists: ['Sabrina Carpenter'], durationMs: 175_000, progressMs: 60_000, isPlaying: true,
     shuffle: false, repeat: 'off' as const, volume: 70, supportsVolume: true, ...over,
   }
   return {
@@ -90,6 +91,7 @@ export function playerBody(over: Partial<{
     currently_playing_type: 'track',
     item: {
       id: 't1',
+      uri: o.uri,
       name: o.name,
       duration_ms: o.durationMs,
       artists: o.artists.map(name => ({ name })),

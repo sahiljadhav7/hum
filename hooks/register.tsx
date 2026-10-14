@@ -210,10 +210,10 @@ async function runDemo($: EngineInterface, args: string) {
     // Demo mode's volume memory is not the real Device's.
     await update($, mutedFrom, () => null)
     await poll($)
-    return { text: isOn ? 'hum: Demo mode on (fake Spotify).' : 'hum: Demo mode off.' }
+    return { text: isOn ? 'Demo mode on (fake Spotify).' : 'Demo mode off.' }
   }
   if (what !== 'no-device' && what !== 'no-volume')
-    return { text: `hum: unknown /hum-demo option "${args.trim()}". Use /hum-demo, /hum-demo no-device or /hum-demo no-volume.` }
+    return { text: `unknown /hum-demo option "${args.trim()}". Use /hum-demo, /hum-demo no-device or /hum-demo no-volume.` }
   const d = await read($, demo)
   const player = d.isOn ? d.player : demoPlayer(now)
   const next =
@@ -222,7 +222,7 @@ async function runDemo($: EngineInterface, args: string) {
   await poll($)
   const isSimulating = what === 'no-device' ? !next.hasDevice : !next.canSetVolume
   const label = what === 'no-device' ? 'no active device' : 'volume not supported'
-  return { text: `hum: Demo mode on; simulating "${label}" ${isSimulating ? 'on' : 'off'}.` }
+  return { text: `Demo mode on; simulating "${label}" ${isSimulating ? 'on' : 'off'}.` }
 }
 
 const NOTE_NO_DEVICE = `${HINT_NO_DEVICE}. Start playing in Spotify on a device, then pick again.`
@@ -236,16 +236,16 @@ const failureNote = (reply: Reply | null) =>
 
 /** /hum-playlist: loads the first page of the user's playlists and opens the Playlist picker. */
 async function runPlaylist($: EngineInterface) {
-  if (!(await read($, demo)).isOn && (await accessToken($)) === null) return { text: 'hum: run /hum-login first to see your playlists.' }
+  if (!(await read($, demo)).isOn && (await accessToken($)) === null) return { text: 'run /hum-login first to see your playlists.' }
   const me = await api($, GET_ME)
   const userId = parseMe(me)
-  if (userId === null) return { text: `hum: couldn't load your playlists. ${failureNote(me)}` }
+  if (userId === null) return { text: `couldn't load your playlists. ${failureNote(me)}` }
   const reply = await api($, playlistsCall(0))
   const playlists = parsePlaylists(reply, userId)
-  if (playlists === null) return { text: `hum: couldn't load your playlists. ${failureNote(reply)}` }
+  if (playlists === null) return { text: `couldn't load your playlists. ${failureNote(reply)}` }
   await update($, picker, () => ({ userId, playlists, open: null, note: '' }))
   await $.ui.open({ id: PICKER_PANE, title: 'Playlists', focus: true, closeOnEscape: true })
-  return { text: 'hum: your playlists are open.' }
+  return { text: 'your playlists are open.' }
 }
 
 async function openPlaylist($: EngineInterface, playlist: PlaylistRow) {
@@ -270,6 +270,8 @@ async function loadMore($: EngineInterface) {
   await update($, picker, cur => {
     // Back, or another playlist opened, while the page loaded: it belongs to a list no longer shown.
     if (cur.open?.playlist.id !== open?.playlist.id) return cur
+    // More pressed again before this page arrived: the list is already past it.
+    if ((cur.open === null ? cur.playlists : cur.open.tracks).next !== next) return cur
     if (cur.open === null) {
       const page = parsePlaylists(reply, cur.userId)
       return page === null ? { ...cur, note: `hum: ${failureNote(reply)}` } : { ...cur, playlists: appendPage(cur.playlists, page), note: '' }
@@ -279,6 +281,12 @@ async function loadMore($: EngineInterface) {
       ? { ...cur, note: `hum: ${failureNote(reply)}` }
       : { ...cur, open: { ...cur.open, tracks: appendPage(cur.open.tracks, page) }, note: '' }
   })
+}
+
+/** The URI of the track playing now, or '' when idle. */
+async function playingUri($: EngineInterface) {
+  const np = await read($, nowPlaying)
+  return np.kind === 'playing' ? np.track.uri : ''
 }
 
 /** Plays `track` within the open playlist on the Active device, then closes the pane. */
@@ -343,16 +351,22 @@ async function clearLoginTrouble($: EngineInterface) {
   await update($, premiumRequired, () => false)
 }
 
-/** Finishes a login from Spotify's redirect URL (pasted, or caught by the helper). */
+/** What finishLogin answers when the login worked. */
+const LOGGED_IN = 'logged in to Spotify.'
+
+/**
+ * Finishes a login from Spotify's redirect URL (pasted, or caught by the
+ * helper); what happened, as a command reply (Claude Code puts "hum: " before it).
+ */
 async function finishLogin($: EngineInterface, redirectUrl: string) {
   const pending = await read($, pendingLogin)
   const redirect = parseRedirect(redirectUrl)
-  if (pending === null) return 'hum: no login in progress. Run /hum-login <client-id> first.'
+  if (pending === null) return 'no login in progress. Run /hum-login <client-id> first.'
   if (redirect === null || redirect.state !== pending.state)
-    return "hum: that redirect URL doesn't belong to the login you started. Run /hum-login <client-id> again."
+    return "that redirect URL doesn't belong to the login you started. Run /hum-login <client-id> again."
   if (redirect.kind === 'error') {
     await update($, pendingLogin, () => null)
-    return `hum: Spotify login was cancelled (${redirect.error}).`
+    return `Spotify login was cancelled (${redirect.error}).`
   }
   const reply = await tokenRequest($, {
     grant_type: 'authorization_code',
@@ -362,14 +376,14 @@ async function finishLogin($: EngineInterface, redirectUrl: string) {
     code_verifier: pending.verifier,
   })
   // A temporary failure keeps the login pending, so pasting the address again can finish it.
-  if (!reply.ok && reply.isTemporary) return `hum: couldn't finish the login (${reply.reason}). Paste the address again: /hum-login <address>`
+  if (!reply.ok && reply.isTemporary) return `couldn't finish the login (${reply.reason}). Paste the address again: /hum-login <address>`
   await update($, pendingLogin, () => null)
-  if (!reply.ok) return `hum: Spotify refused the login (${reply.reason}).`
+  if (!reply.ok) return `Spotify refused the login (${reply.reason}).`
   const auth: Auth = { clientId: pending.clientId, accessToken: reply.accessToken, refreshToken: reply.refreshToken ?? '', expiresAt: reply.expiresAt }
   await $.store.set('auth', auth)
   await clearLoginTrouble($)
   await poll($)
-  return 'hum: logged in to Spotify.'
+  return LOGGED_IN
 }
 
 /**
@@ -398,7 +412,7 @@ async function startHelper($: EngineInterface) {
     }
     // Still pending: the helper stopped (port taken, timed out) without a redirect, unless one was pasted.
     if (outcome === null && (await read($, pendingLogin)) !== null) await update($, nowPlaying, () => idle(HINT_PASTE))
-    else if (outcome !== null && outcome !== 'hum: logged in to Spotify.') await update($, nowPlaying, () => idle(outcome))
+    else if (outcome !== null && outcome !== LOGGED_IN) await update($, nowPlaying, () => idle(`hum: ${outcome}`))
   })()
   return true
 }
@@ -415,8 +429,8 @@ async function startLogin($: EngineInterface, clientId: string) {
     : `Approve it, then copy the address the browser lands on (it starts with ${REDIRECT_URI}) and run: /hum-login <that address>`
   return {
     text: opened
-      ? `hum: opened the Spotify login in your browser. ${nextStep}`
-      : `hum: couldn't open a browser. Open this link to log in:\n${url}\n${nextStep}`,
+      ? `opened the Spotify login in your browser. ${nextStep}`
+      : `couldn't open a browser. Open this link to log in:\n${url}\n${nextStep}`,
   }
 }
 
@@ -433,7 +447,7 @@ async function runLogin($: EngineInterface, args: string) {
   }
   if (/^https?:\/\//.test(given)) return { text: await finishLogin($, given) }
   if (!isClientId(given))
-    return { text: `hum: "${given}" doesn't look like a Spotify client ID (32 letters and digits). Run /hum-login for the steps.` }
+    return { text: `"${given}" doesn't look like a Spotify client ID (32 letters and digits). Run /hum-login for the steps.` }
   return startLogin($, given)
 }
 
@@ -445,7 +459,7 @@ async function runLogout($: EngineInterface) {
   await clearLoginTrouble($)
   await update($, mutedFrom, () => null)
   await poll($)
-  return { text: wasLoggedIn ? 'hum: logged out of Spotify.' : 'hum: not logged in.' }
+  return { text: wasLoggedIn ? 'logged out of Spotify.' : 'not logged in.' }
 }
 
 /** The chosen Look: this session's, else the one saved by an earlier session. */
@@ -459,11 +473,11 @@ async function chosenStyle($: EngineInterface): Promise<Style> {
 async function runStyle($: EngineInterface, args: string) {
   const wanted = args.trim().toLowerCase()
   const choices = STYLES.map(s => STYLE_NAMES[s]).join(', ')
-  if (wanted === '') return { text: `hum look: ${STYLE_NAMES[await chosenStyle($)]}. Choices: ${choices}.` }
-  if (!isStyle(wanted)) return { text: `hum: no look called "${args.trim()}". Choices: ${choices}.` }
+  if (wanted === '') return { text: `look: ${STYLE_NAMES[await chosenStyle($)]}. Choices: ${choices}.` }
+  if (!isStyle(wanted)) return { text: `no look called "${args.trim()}". Choices: ${choices}.` }
   await $.state.set(styleRef, wanted)
   await $.store.set('style', wanted)
-  return { text: `hum look: ${STYLE_NAMES[wanted]}` }
+  return { text: `look: ${STYLE_NAMES[wanted]}` }
 }
 
 async function readCaps($: EngineInterface): Promise<Caps> {
@@ -528,7 +542,7 @@ export const register: Register = on => {
   on('ui.render', { component: 'PromptHint' }, async ($, e) => drawUnderPrompt($, e as never, e.viewport?.columns ?? 80))
 
   on('ui.render', { component: 'Pane', requestId: PICKER_PANE }, async ($, e) =>
-    drawPicker($.ui.resolve(e) as Record<string, any>, await read($, picker), e.props.bodyColumns, {
+    drawPicker($.ui.resolve(e) as Record<string, any>, await read($, picker), e.props.bodyColumns, await playingUri($), {
       openPlaylist: playlist => openPlaylist($, playlist),
       back: () => update($, picker, p => ({ ...p, open: null, note: '' })),
       more: () => loadMore($),

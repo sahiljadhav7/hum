@@ -157,14 +157,14 @@ test('/hum-style glass switches to the Glass look', async ($, on) => {
 test('/hum-style with no look names the current one and the choices', async ($, on) => {
   setup(on)
   await startSession($, on)
-  expect(await style($, '')).toBe('hum look: Glossy. Choices: Glossy, Minimal, Glass.')
+  expect(await style($, '')).toBe('look: Glossy. Choices: Glossy, Minimal, Glass.')
 })
 
 test('/hum-style rejects an unknown look and keeps the current one', async ($, on) => {
   setup(on)
   await startSession($, on)
-  expect(await style($, 'neon')).toBe('hum: no look called "neon". Choices: Glossy, Minimal, Glass.')
-  expect(await style($, '')).toMatch(/^hum look: Glossy\./)
+  expect(await style($, 'neon')).toBe('no look called "neon". Choices: Glossy, Minimal, Glass.')
+  expect(await style($, '')).toMatch(/^look: Glossy\./)
 })
 
 test('the look chosen in an earlier session is used', async ($, on) => {

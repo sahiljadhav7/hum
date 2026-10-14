@@ -119,20 +119,40 @@ What issue 04 learned, kept in case the Cover returns (`prototypes/02-cover/`, t
 
 ## Playlist picker
 
-A Claude Code pane (`$.ui.open`, id `hum-playlist`, title "Playlists"), opened with the keyboard and closed by Esc.
+A Claude Code pane (`$.ui.open`, id `hum-playlist`, title "Playlists"), opened with the keyboard and closed by Esc. Its layout follows shadcn's Card and Table (chosen 2026-10-14, issue 08), drawn with Claude Code's own elements: shadcn/ui is React for the browser and can't draw in the terminal. The pane's frame is the card's border, so hum draws no second one.
 
 ```
-Late night code · 3 tracks
-Road trip · 12 tracks
-More…
+Playlists
+2 of yours · 15 tracks
+──────────────────────────────────────────────────
+Late night code                         3 tracks ›
+Road trip with a very very long playl… 12 tracks ›
+
+  inside a playlist:
+‹ Playlists
+Late night code
+3 tracks
+──────────────────────────────────────────────────
+ #  Title                  Artist             Time
+ 1  Espresso               Sabrina Carpent…   2:55
+♪3  Flowers                Miley Cyrus        3:20
 ```
 
-- **Rows**: one plain `Button` each, in the theme's `text` with the dim part dimmed, cut with `…` to the pane's width. Playlists show `name · N tracks`. Inside one, the rows are `← Playlists`, the playlist's name in bold, then `title · artist` per track.
+- **Card head**: a bold title, a dim description, then a dim rule as wide as the pane. For the playlists the description is `N of yours · M tracks` (`N+` while Spotify has more pages); inside one it is the playlist's track count.
+- **Playlist rows**: one plain `Button` each, the name in the theme's `text` and `N tracks ›` dim at the right edge; a long name is cut with `…`.
+- **Track table**: a dim header `# Title Artist Time`, then one plain `Button` per track: its number in the playlist, the title, the artist dim, and the duration (`m:ss`) dim and right-aligned. Title and artist share the width left over, about 55/45, each cut with `…`. Episodes show their show as the artist.
+- **Widths are columns, not characters**: emoji and East Asian wide characters count as 2, marks and joiners as 0 (one grapheme at a time), so a name like `🔥 Hits` stays aligned. The Bar measures the same way.
+- **Playing now**: the row whose Spotify URI is the track playing has `♪` before its number in the theme's `success`, and a bold title.
+- **Back**: `‹ Playlists`, dim, above the playlist's name.
 - **Only the user's own and collaborative playlists.** Since March 2026 Spotify returns a playlist's items (`GET /v1/playlists/{id}/items`) only to its owner or collaborators, so followed playlists aren't listed. Ownership is the playlist's `owner.id` against `GET /v1/me`.
-- **50 at a time**: a `More…` row at the bottom loads the next 50. The pane scrolls a list taller than itself.
-- **A track plays within its playlist**: `PUT /v1/me/player/play` with the playlist's `context_uri` and `offset.position`, so next and previous follow it. Unavailable entries get no row but keep their place in the count.
-- **A line at the top** in the theme's `warning` says why a pick didn't play: no Active device (hum's last poll said so, or Spotify answered `404`), hum not sending (logged out, a free account, or a back-off: the Bar says which), or Spotify's status. The pane stays open then; it closes only once Spotify accepts the play.
+- **50 at a time**: a `More…` row at the bottom loads the next 50 (pressed twice, the page is added once). The pane scrolls a list taller than itself.
+- **A track plays within its playlist**: `PUT /v1/me/player/play` with the playlist's `context_uri` and `offset.position`, so next and previous follow it. Unavailable entries and local files (Spotify can't start one remotely) get no row but keep their place in the count.
+- **A note under the head** in the theme's `warning` says why a pick didn't play: no Active device (hum's last poll said so, or Spotify answered `404`), hum not sending (logged out, a free account, or a back-off: the Bar says which), or Spotify's status. The pane stays open then; it closes only once Spotify accepts the play.
 - **Not logged in**: `/hum-playlist` answers `hum: run /hum-login first to see your playlists.` and opens nothing.
+
+## Command replies
+
+Claude Code shows a command's reply after the plugin's name (`hum: …`), so hum's replies don't start with `hum:` themselves (issue 08: the user saw `hum: hum: your playlists are open.`). The Bar's Idle hints and the picker's notes are drawn by hum and keep their `hum:`.
 
 ## Later
 

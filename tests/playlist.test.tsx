@@ -38,13 +38,27 @@ const page = (path: string, items: unknown[], offset: number, total: number) => 
 })
 
 /** A playlist entry from `GET /v1/playlists/{id}/items`; a null item is a track no longer available. */
-const entry = (name: string | null, artists: string[] = []) => ({
+const entry = (name: string | null, artists: string[] = [], durationMs = 200_000) => ({
   added_at: '2026-01-01T00:00:00Z',
   is_local: false,
   item:
     name === null
       ? null
-      : { type: 'track', id: name, name, uri: `spotify:track:${name}`, duration_ms: 200_000, artists: artists.map(a => ({ name: a })) },
+      : { type: 'track', id: name, name, uri: `spotify:track:${name}`, duration_ms: durationMs, artists: artists.map(a => ({ name: a })) },
+})
+
+/** A local file in a playlist: Spotify lists it, with no id. */
+const localEntry = (name: string) => ({
+  added_at: '2026-01-01T00:00:00Z',
+  is_local: true,
+  item: { type: 'track', id: null, name, uri: `spotify:local:::${name}:180`, duration_ms: 180_000, artists: [{ name: 'Me' }] },
+})
+
+/** A podcast episode in a playlist: it has a show, no artists. */
+const episodeEntry = (name: string, show: string) => ({
+  added_at: '2026-01-01T00:00:00Z',
+  is_local: false,
+  item: { type: 'episode', id: name, name, uri: `spotify:episode:${name}`, duration_ms: 3_600_000, show: { name: show } },
 })
 
 const ME = { id: 'sahil', display_name: 'Sahil', type: 'user', uri: 'spotify:user:sahil' }
@@ -55,7 +69,7 @@ const PLAYLISTS = [
   playlist('p-shared', 'Road trip', 'friend', 12, true),
 ]
 
-const ITEMS = [entry('Espresso', ['Sabrina Carpenter']), entry(null), entry('Flowers', ['Miley Cyrus'])]
+const ITEMS = [entry('Espresso', ['Sabrina Carpenter'], 175_000), entry(null), entry('Flowers', ['Miley Cyrus'], 200_000)]
 
 /** A stand-in for Spotify with the playlists above; `play` answers PUT /me/player/play. */
 function account(on: any, over: { player?: () => { status: number; body?: unknown }; play?: number } = {}) {
@@ -104,7 +118,8 @@ test('/hum-playlist opens a pane listing the playlists the user owns or collabor
   const sent = account(on)
   const { opened } = panes(on)
   await startSession($, on)
-  await run($, 'hum-playlist')
+  // Claude Code shows a command's reply after the plugin's name, so hum adds none of its own.
+  expect(await run($, 'hum-playlist')).toBe('your playlists are open.')
   expect(opened).toEqual([{ id: 'hum-playlist', title: 'Playlists' }])
   expect(asked(sent)).toContain('GET /me/playlists?limit=50&offset=0')
   const ui = await pane($)
@@ -122,7 +137,7 @@ test('picking a playlist lists its tracks; back returns to the playlists', async
   await run($, 'hum-playlist')
   const ui = await pane($)
   await ui.press({ key: 'playlist:p-mine' })
-  expect(asked(sent)).toContain('GET /playlists/p-mine/items?limit=50&offset=0')
+  expect(asked(sent)).toContain('GET /playlists/p-mine/items?limit=50&offset=0&additional_types=episode')
   // The unavailable entry has no row; each row keeps its place in the playlist.
   expect(await rows(ui)).toEqual(['back', 'track:0', 'track:2'])
   expect(await ui.find({ type: 'Text', text: /Sabrina Carpenter/ })).toBeDefined()
@@ -251,7 +266,7 @@ test("a playlist's tracks page too, and a track from page 2 plays at its place i
   await ui.press({ key: 'playlist:p-long' })
   expect((await rows(ui)).at(-1)).toBe('more')
   await ui.press({ key: 'more' })
-  expect(asked(sent)).toContain('GET /playlists/p-long/items?limit=50&offset=50')
+  expect(asked(sent)).toContain('GET /playlists/p-long/items?limit=50&offset=50&additional_types=episode')
   expect(await rows(ui)).toHaveLength(61) // back + 60 tracks
   await ui.press({ key: 'track:52' })
   const play = sent.find(r => r.method === 'PUT' && r.url === `${API}/me/player/play`)
@@ -337,5 +352,103 @@ test('opening B while A is still loading shows B, whichever answers last', async
   await a
   expect(await ui.find({ type: 'Text', text: /From B/ })).toBeDefined()
   expect(await ui.find({ type: 'Text', text: /From A/ })).toBeUndefined()
+  await ui.unmount()
+})
+
+test('the playlists are a card: a title, a description with the counts, and N tracks › on each row', async ($, on) => {
+  setup(on, {}, LOGGED_IN)
+  account(on)
+  panes(on)
+  await startSession($, on)
+  await run($, 'hum-playlist')
+  const ui = await pane($)
+  expect((await ui.find({ type: 'Text', text: 'Playlists' }))?.props.bold).toBe(true)
+  expect(await ui.find({ type: 'Text', text: '2 of yours · 15 tracks' })).toBeDefined() // 3 + 12
+  expect(await ui.find({ type: 'Text', text: /12 tracks ›$/ })).toBeDefined()
+  await ui.unmount()
+})
+
+test('inside a playlist the tracks are a table, and the one playing is marked', async ($, on) => {
+  setup(on, {}, LOGGED_IN)
+  account(on, { player: () => ({ status: 200, body: playerBody({ uri: 'spotify:track:Flowers', name: 'Flowers' }) }) })
+  panes(on)
+  await startSession($, on)
+  await run($, 'hum-playlist')
+  const ui = await pane($)
+  await ui.press({ key: 'playlist:p-mine' })
+  expect(await ui.find({ type: 'Text', text: /^\s*#\s+Title\s+Artist\s+Time\s*$/ })).toBeDefined()
+  // Spotify's duration_ms: 175000 is 2:55, 200000 is 3:20. Flowers is the playlist's 3rd entry.
+  expect(await ui.find({ type: 'Text', text: '2:55' })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: '3:20' })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /♪\s*3/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /♪\s*1/ })).toBeUndefined()
+  await ui.unmount()
+})
+
+test("local files get no row but keep their place; episodes show their show", async ($, on) => {
+  setup(on, {}, LOGGED_IN)
+  spotify(on, req => {
+    const path = new URL(req.url).pathname.replace('/v1', '')
+    if (path === '/me') return { status: 200, body: ME }
+    if (path === '/me/playlists') return { status: 200, body: page(path, [playlist('p-mixed', 'Mixed', 'sahil', 3)], 0, 1) }
+    if (path === '/playlists/p-mixed/items') return { status: 200, body: page(path, [localEntry('My demo'), episodeEntry('Ep 1', 'The Daily'), entry('Song', ['Band'])], 0, 3) }
+    return { status: 200, body: playerBody() }
+  })
+  panes(on)
+  await startSession($, on)
+  await run($, 'hum-playlist')
+  const ui = await pane($)
+  await ui.press({ key: 'playlist:p-mixed' })
+  expect(await rows(ui)).toEqual(['back', 'track:1', 'track:2'])
+  expect(await ui.find({ type: 'Text', text: /The Daily/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /My demo/ })).toBeUndefined()
+  await ui.unmount()
+})
+
+test('pressing More twice before the page arrives adds it once', async ($, on) => {
+  setup(on, {}, LOGGED_IN)
+  const many = Array.from({ length: 60 }, (_, i) => playlist(`p${i}`, `Mix ${i}`, 'sahil', 10))
+  let release = () => {}
+  const held = new Promise<void>(r => (release = r))
+  on('http.fetch', async (_$: unknown, e: { url: string }) => {
+    const url = new URL(e.url)
+    const path = url.pathname.replace('/v1', '')
+    const offset = Number(url.searchParams.get('offset'))
+    const reply = (body: unknown) => ({ value: { status: 200, ok: true, headers: {}, text: JSON.stringify(body) } })
+    if (path === '/me') return reply(ME)
+    if (path === '/me/playlists') {
+      if (offset === 50) await held
+      return reply(page(path, many.slice(offset, offset + 50), offset, many.length))
+    }
+    return reply(playerBody())
+  })
+  panes(on)
+  await startSession($, on)
+  await run($, 'hum-playlist')
+  const ui = await pane($)
+  const first = ui.press({ key: 'more' })
+  const second = ui.press({ key: 'more' })
+  release()
+  await first
+  await second
+  expect(await rows(ui)).toHaveLength(60)
+  await ui.unmount()
+})
+
+test('emoji and wide characters count as two columns, so the rows stay aligned', async ($, on) => {
+  setup(on, {}, LOGGED_IN)
+  spotify(on, req => {
+    const path = new URL(req.url).pathname.replace('/v1', '')
+    if (path === '/me') return { status: 200, body: ME }
+    if (path === '/me/playlists') return { status: 200, body: page(path, [playlist('p-fire', '🔥 Hits', 'sahil', 3), playlist('p-jp', '夜の曲', 'sahil', 3)], 0, 2) }
+    return { status: 200, body: playerBody() }
+  })
+  panes(on)
+  await startSession($, on)
+  await run($, 'hum-playlist')
+  const ui = await pane($) // 60 columns: the name takes 50, then "3 tracks ›" (10)
+  // 🔥 is 2 columns, the space 1, "Hits" 4: 7, so 43 spaces. 夜, の and 曲 are 2 each: 6, so 44.
+  expect(await ui.find({ type: 'Text', text: /^🔥 Hits {43}$/u })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /^夜の曲 {44}$/u })).toBeDefined()
   await ui.unmount()
 })

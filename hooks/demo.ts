@@ -6,9 +6,9 @@ import { parseRepeat } from './spotify'
 import type { ApiCall } from './spotify'
 
 export const DEMO_TRACKS: Track[] = [
-  { title: 'Muddy Feet (feat Sia)', artist: 'Miley Cyrus, Sia', durationMs: 229_000 },
-  { title: 'Flowers', artist: 'Miley Cyrus', durationMs: 200_000 },
-  { title: 'Midnight City', artist: 'M83', durationMs: 243_000 },
+  { uri: 'spotify:track:demo-0', title: 'Muddy Feet (feat Sia)', artist: 'Miley Cyrus, Sia', durationMs: 229_000 },
+  { uri: 'spotify:track:demo-1', title: 'Flowers', artist: 'Miley Cyrus', durationMs: 200_000 },
+  { uri: 'spotify:track:demo-2', title: 'Midnight City', artist: 'M83', durationMs: 243_000 },
 ]
 
 const DEMO_USER = 'hum-demo'
@@ -85,6 +85,7 @@ const playerJson = (p: DemoPlayer, now: number) => {
     currently_playing_type: 'track',
     item: {
       id: `demo-${p.track}`,
+      uri: t.uri,
       name: t.title,
       duration_ms: t.durationMs,
       artists: t.artist.split(', ').map(name => ({ name })),
@@ -113,7 +114,7 @@ export function demoAnswer(player: DemoPlayer, call: ApiCall, now: number): Demo
       return {
         player: p,
         status: 200,
-        body: onePage(DEMO_TRACKS.map((t, i) => ({ is_local: false, item: { type: 'track', name: t.title, uri: `spotify:track:demo-${i}`, duration_ms: t.durationMs, artists: t.artist.split(', ').map(name => ({ name })) } }))),
+        body: onePage(DEMO_TRACKS.map((t, i) => ({ is_local: false, item: { type: 'track', name: t.title, uri: t.uri, duration_ms: t.durationMs, artists: t.artist.split(', ').map(name => ({ name })) } }))),
       }
     case 'PUT /me/player/play': {
       // With a body, the Playlist picker starts the demo mix at a track; without, a resume.

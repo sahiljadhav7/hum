@@ -141,11 +141,11 @@ test('the volume icon is greyed out and not clickable when the Device cannot set
 test('/hum-demo turns Demo mode on and off', async ($, on) => {
   setup(on)
   await startSession($, on)
-  expect(await demo($)).toBe('hum: Demo mode on (fake Spotify).')
+  expect(await demo($)).toBe('Demo mode on (fake Spotify).')
   let ui = await bar($)
   expect(await ui.find({ type: 'Text', text: /Muddy Feet/ })).toBeDefined()
   await ui.unmount()
-  expect(await demo($)).toBe('hum: Demo mode off.')
+  expect(await demo($)).toBe('Demo mode off.')
   ui = await bar($)
   expect(await ui.find({ type: 'Text', text: 'hum: run /hum-login' })).toBeDefined()
   await ui.unmount()
@@ -180,12 +180,12 @@ test("Demo mode's fake Spotify keeps its state across requests", async ($, on) =
 test('/hum-demo no-device simulates no Active device: the Idle hint', async ($, on) => {
   setup(on)
   await startSession($, on)
-  expect(await demo($, 'no-device')).toBe('hum: Demo mode on; simulating "no active device" on.')
+  expect(await demo($, 'no-device')).toBe('Demo mode on; simulating "no active device" on.')
   let ui = await bar($)
   expect(await ui.find({ type: 'Text', text: 'hum: no active Spotify device' })).toBeDefined()
   expect(await ui.find({ key: 'play' })).toBeUndefined()
   await ui.unmount()
-  expect(await demo($, 'no-device')).toBe('hum: Demo mode on; simulating "no active device" off.')
+  expect(await demo($, 'no-device')).toBe('Demo mode on; simulating "no active device" off.')
   ui = await bar($)
   expect(await ui.find({ key: 'play' })).toBeDefined()
   await ui.unmount()
@@ -204,7 +204,7 @@ test('/hum-demo no-volume simulates a Device without remote volume: the icon is 
 test('/hum-demo with an unknown option says what it takes', async ($, on) => {
   setup(on)
   await startSession($, on)
-  expect(await demo($, 'disco')).toBe('hum: unknown /hum-demo option "disco". Use /hum-demo, /hum-demo no-device or /hum-demo no-volume.')
+  expect(await demo($, 'disco')).toBe('unknown /hum-demo option "disco". Use /hum-demo, /hum-demo no-device or /hum-demo no-volume.')
 })
 
 test('between polls the countdown keeps ticking on its own', async ($, on) => {

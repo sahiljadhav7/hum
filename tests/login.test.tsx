@@ -21,7 +21,7 @@ test('/hum-login rejects something that is not a client ID', async ($, on) => {
   setup(on)
   await startSession($, on)
   expect(await login($, 'hello')).toBe(
-    'hum: "hello" doesn\'t look like a Spotify client ID (32 letters and digits). Run /hum-login for the steps.',
+    '"hello" doesn\'t look like a Spotify client ID (32 letters and digits). Run /hum-login for the steps.',
   )
 })
 
@@ -98,7 +98,7 @@ test('pasting the redirect URL finishes the login: PKCE code exchange, then the 
   await login($, CLIENT_ID)
   const opened = openedUrl(ran)!
   const state = opened.searchParams.get('state')!
-  expect(await login($, `${REDIRECT}?code=the-code&state=${state}`)).toBe('hum: logged in to Spotify.')
+  expect(await login($, `${REDIRECT}?code=the-code&state=${state}`)).toBe('logged in to Spotify.')
   const exchange = sent.find(r => r.url === TOKEN_URL)!
   expect(exchange.method).toBe('POST')
   expect(exchange.headers['Content-Type']).toBe('application/x-www-form-urlencoded')
@@ -119,7 +119,7 @@ test('a redirect URL from another login attempt is refused', async ($, on) => {
   await startSession($, on)
   await login($, CLIENT_ID)
   expect(await login($, `${REDIRECT}?code=x&state=not-ours`)).toBe(
-    "hum: that redirect URL doesn't belong to the login you started. Run /hum-login <client-id> again.",
+    "that redirect URL doesn't belong to the login you started. Run /hum-login <client-id> again.",
   )
   expect(sent.some(r => r.url === TOKEN_URL)).toBe(false)
 })
@@ -130,13 +130,13 @@ test('a cancelled login says so', async ($, on) => {
   await startSession($, on)
   await login($, CLIENT_ID)
   const state = openedUrl(ran)!.searchParams.get('state')!
-  expect(await login($, `${REDIRECT}?error=access_denied&state=${state}`)).toBe('hum: Spotify login was cancelled (access_denied).')
+  expect(await login($, `${REDIRECT}?error=access_denied&state=${state}`)).toBe('Spotify login was cancelled (access_denied).')
 })
 
 test('pasting a redirect URL before starting a login says what to run first', async ($, on) => {
   setup(on)
   await startSession($, on)
-  expect(await login($, `${REDIRECT}?code=x&state=y`)).toBe('hum: no login in progress. Run /hum-login <client-id> first.')
+  expect(await login($, `${REDIRECT}?code=x&state=y`)).toBe('no login in progress. Run /hum-login <client-id> first.')
 })
 
 test('a failed code exchange says why and leaves hum logged out', async ($, on) => {
@@ -148,7 +148,7 @@ test('a failed code exchange says why and leaves hum logged out', async ($, on) 
   await startSession($, on)
   await login($, CLIENT_ID)
   const state = openedUrl(ran)!.searchParams.get('state')!
-  expect(await login($, `${REDIRECT}?code=bad&state=${state}`)).toBe('hum: Spotify refused the login (invalid_grant: Invalid authorization code).')
+  expect(await login($, `${REDIRECT}?code=bad&state=${state}`)).toBe('Spotify refused the login (invalid_grant: Invalid authorization code).')
   const ui = await bar($)
   expect(await ui.find({ type: 'Text', text: 'hum: run /hum-login' })).toBeDefined()
   await ui.unmount()
@@ -256,7 +256,7 @@ test('/hum-logout forgets the login: the Bar asks to log in and nothing more is 
   const clock = setup(on, {}, STORED())
   const sent = spotify(on, () => ({ status: 200, body: playerBody() }))
   await startSession($, on)
-  expect(await run($, 'hum-logout')).toBe('hum: logged out of Spotify.')
+  expect(await run($, 'hum-logout')).toBe('logged out of Spotify.')
   const ui = await bar($)
   expect(await ui.find({ type: 'Text', text: 'hum: run /hum-login' })).toBeDefined()
   const before = sent.length
@@ -268,7 +268,7 @@ test('/hum-logout forgets the login: the Bar asks to log in and nothing more is 
 test('/hum-logout when not logged in says so', async ($, on) => {
   setup(on)
   await startSession($, on)
-  expect(await run($, 'hum-logout')).toBe('hum: not logged in.')
+  expect(await run($, 'hum-logout')).toBe('not logged in.')
 })
 
 // Code-review follow-ups.
