@@ -11,6 +11,26 @@ export const DEMO_TRACKS: Track[] = [
   { title: 'Midnight City', artist: 'M83', durationMs: 243_000 },
 ]
 
+const DEMO_USER = 'hum-demo'
+const DEMO_MIX = 'demo-mix'
+
+/** Demo mode's playlists, as `GET /v1/me/playlists` lists them: the fake player's tracks, and one the user only follows. */
+const demoPlaylists = () =>
+  [
+    { id: DEMO_MIX, name: 'hum demo mix', owner: DEMO_USER, total: DEMO_TRACKS.length },
+    { id: 'demo-top', name: 'Top 50', owner: 'spotify', total: 50 },
+  ].map(p => ({
+    collaborative: false,
+    id: p.id,
+    name: p.name,
+    owner: { id: p.owner, display_name: p.owner, type: 'user', uri: `spotify:user:${p.owner}` },
+    items: { href: '', total: p.total },
+    type: 'playlist',
+    uri: `spotify:playlist:${p.id}`,
+  }))
+
+const onePage = (items: unknown[]) => ({ limit: 50, offset: 0, next: null, previous: null, total: items.length, items })
+
 /** Within this much of a track's start, Previous goes back a track; later, it restarts it (as Spotify does). */
 const RESTART_MS = 3_000
 
@@ -76,7 +96,8 @@ const playerJson = (p: DemoPlayer, now: number) => {
 /** Spotify's answer to `call` at `now`, and the fake player after it. */
 export function demoAnswer(player: DemoPlayer, call: ApiCall, now: number): DemoAnswer {
   const p = advance(player, now)
-  if (!p.hasDevice) return { player: p, status: call.method === 'GET' ? 204 : 404 }
+  // Without a Device only the player answers differently; the playlists are still there.
+  if (!p.hasDevice && call.path.startsWith('/me/player')) return { player: p, status: call.method === 'GET' ? 204 : 404 }
   // Pin the position to `now`, so every change starts from the truth.
   const pinned = { ...p, positionMs: positionOf(p, now), anchoredAt: now }
   const q = call.query ?? {}
@@ -84,8 +105,23 @@ export function demoAnswer(player: DemoPlayer, call: ApiCall, now: number): Demo
   switch (`${call.method} ${call.path}`) {
     case 'GET /me/player':
       return { player: p, status: 200, body: playerJson(p, now) }
-    case 'PUT /me/player/play':
-      return ok({ ...pinned, isPlaying: true })
+    case 'GET /me':
+      return { player: p, status: 200, body: { id: DEMO_USER, display_name: 'hum demo', type: 'user', uri: `spotify:user:${DEMO_USER}` } }
+    case 'GET /me/playlists':
+      return { player: p, status: 200, body: onePage(demoPlaylists()) }
+    case `GET /playlists/${DEMO_MIX}/items`:
+      return {
+        player: p,
+        status: 200,
+        body: onePage(DEMO_TRACKS.map((t, i) => ({ is_local: false, item: { type: 'track', name: t.title, uri: `spotify:track:demo-${i}`, duration_ms: t.durationMs, artists: t.artist.split(', ').map(name => ({ name })) } }))),
+      }
+    case 'PUT /me/player/play': {
+      // With a body, the Playlist picker starts the demo mix at a track; without, a resume.
+      const body = call.body as { context_uri?: string; offset?: { position?: number } } | undefined
+      if (body === undefined) return ok({ ...pinned, isPlaying: true })
+      if (body.context_uri !== `spotify:playlist:${DEMO_MIX}`) return { player: p, status: 404 }
+      return ok({ ...goTo(pinned, body.offset?.position ?? 0, now), isPlaying: true })
+    }
     case 'PUT /me/player/pause':
       return ok({ ...pinned, isPlaying: false })
     case 'POST /me/player/next':

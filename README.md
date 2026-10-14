@@ -65,7 +65,7 @@ A `/plugin install` line comes later, when hum is packaged for sharing.
 | `/hum-demo no-volume` | Simulates a device that doesn't allow remote volume (the volume icon greys out). |
 | `/hum-login [client-id \| redirect URL]` | Logs in to Spotify. With no argument, shows the one-time setup. |
 | `/hum-logout` | Forgets the login. |
-| `/hum-playlist` | *Planned.* Browse your playlists and pick a track. |
+| `/hum-playlist` | Opens the Playlist picker, a pane with the playlists you own or collaborate on. Pick one, then a track to play it within the playlist. Spotify no longer lets Developer apps read the tracks of playlists you only follow, so those aren't listed. |
 
 ## What the Bar shows when it can't play
 
@@ -86,7 +86,7 @@ A `/plugin install` line comes later, when hum is packaged for sharing.
 | 03 | `/hum-login` and `/hum-logout` | Done |
 | 04 | Prototype: decoding the Cover | Done |
 | 05 | Real Cover in the Bar | Dropped ([ADR 0004](docs/adr/0004-drop-the-cover.md)) |
-| 06 | `/hum-playlist` | Planned |
+| 06 | `/hum-playlist` | Done |
 | 07 | Package for `/plugin install` | Planned |
 
 The issues live in [`.scratch/hum/issues/`](.scratch/hum/issues/).

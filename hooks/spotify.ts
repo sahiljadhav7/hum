@@ -1,15 +1,18 @@
 // The Spotify Web API, as pure functions: which request each Command is, and
 // what a `GET /v1/me/player` answer means for the Bar. register.tsx sends the
 // requests (through $.http.fetch, or Demo mode).
-// Reference: https://developer.spotify.com/documentation/web-api (Player).
-import type { NowPlaying } from '../types'
+// Reference: https://developer.spotify.com/documentation/web-api (Player, Playlists).
+import type { NowPlaying, Page, PlaylistRow, TrackRow } from '../types'
 import { DEFAULT_VOLUME, HINT_AD, HINT_NO_DEVICE, HINT_NOTHING, idle, nextRepeat } from './player'
 import type { Command, Playing } from './player'
 
 export const API = 'https://api.spotify.com/v1'
 
-/** One Web API request, before it becomes a URL. */
-export type ApiCall = { method: 'GET' | 'PUT' | 'POST'; path: string; query?: Record<string, string> }
+/** Spotify's answer to one request; null where hum sent nothing (logged out, a free account, a back-off). */
+export type Reply = { status: number; text: string }
+
+/** One Web API request, before it becomes a URL; `body` is sent as JSON. */
+export type ApiCall = { method: 'GET' | 'PUT' | 'POST'; path: string; query?: Record<string, string>; body?: unknown }
 
 // Without additional_types=episode, Spotify sends no item for a podcast episode.
 export const GET_PLAYER: ApiCall = { method: 'GET', path: '/me/player', query: { additional_types: 'episode' } }
@@ -67,6 +70,15 @@ type PlayerJson = {
   } | null
 }
 
+const parseJson = <T>(status: number, text: string): T | null => {
+  if (status !== 200) return null
+  try {
+    return JSON.parse(text) as T
+  } catch {
+    return null
+  }
+}
+
 export const parseRepeat = (state: string | undefined) => (state === 'context' || state === 'track' ? state : 'off')
 
 /**
@@ -76,13 +88,8 @@ export const parseRepeat = (state: string | undefined) => (state === 'context' |
  */
 export function parsePlayer(status: number, text: string, at: number): NowPlaying | null {
   if (status === 204 || (status === 200 && text.trim() === '')) return idle(HINT_NO_DEVICE)
-  if (status !== 200) return null
-  let json: PlayerJson
-  try {
-    json = JSON.parse(text) as PlayerJson
-  } catch {
-    return null
-  }
+  const json = parseJson<PlayerJson>(status, text)
+  if (json === null) return null
   if (!json.device) return idle(HINT_NO_DEVICE)
   if (json.currently_playing_type === 'ad') return idle(HINT_AD)
   const item = json.item
@@ -105,4 +112,80 @@ export function parsePlayer(status: number, text: string, at: number): NowPlayin
     volume: Math.max(0, Math.min(100, json.device.volume_percent ?? 0)) / 100,
     canSetVolume: json.device.supports_volume !== false,
   }
+}
+
+// The Playlist picker. Spotify pages lists 50 at a time at most.
+const PAGE_SIZE = 50
+
+export const GET_ME: ApiCall = { method: 'GET', path: '/me' }
+
+export const playlistsCall = (offset: number): ApiCall => ({
+  method: 'GET',
+  path: '/me/playlists',
+  query: { limit: String(PAGE_SIZE), offset: String(offset) },
+})
+
+// `/items`, not `/tracks`: Spotify removed the latter in February 2026.
+export const itemsCall = (playlistId: string, offset: number): ApiCall => ({
+  method: 'GET',
+  path: `/playlists/${encodeURIComponent(playlistId)}/items`,
+  query: { limit: String(PAGE_SIZE), offset: String(offset) },
+})
+
+/** Plays the playlist from the entry at `position` (zero-based), so next and previous follow it. */
+export const playCall = (playlistUri: string, position: number): ApiCall => ({
+  method: 'PUT',
+  path: '/me/player/play',
+  body: { context_uri: playlistUri, offset: { position } },
+})
+
+type PageJson<T> = { offset?: number; next?: string | null; items?: T[] }
+
+/** The offset of the page after `json`, or null after the last. */
+const nextOffset = (json: PageJson<unknown>) =>
+  typeof json.next === 'string' ? (json.offset ?? 0) + (json.items ?? []).length : null
+
+/** `more` added after `page`: the rows so far, and where the list goes on. */
+export const appendPage = <R>(page: Page<R>, more: Page<R>): Page<R> => ({ rows: [...page.rows, ...more.rows], next: more.next })
+
+/** The user's id from `GET /v1/me`, or null. */
+export const parseMe = (reply: Reply | null) => {
+  const id = reply === null ? undefined : parseJson<{ id?: string }>(reply.status, reply.text)?.id
+  return typeof id === 'string' ? id : null
+}
+
+type PlaylistJson = { id?: string; name?: string; uri?: string; collaborative?: boolean; owner?: { id?: string }; items?: { total?: number } }
+
+/**
+ * A page of `GET /v1/me/playlists`, keeping only the playlists `userId` owns or
+ * collaborates on: Spotify shares no other playlist's items with a Developer app.
+ */
+export function parsePlaylists(reply: Reply | null, userId: string): Page<PlaylistRow> | null {
+  const json = reply === null ? null : parseJson<PageJson<PlaylistJson | null>>(reply.status, reply.text)
+  if (json === null) return null
+  const rows = (json.items ?? []).flatMap(p =>
+    p !== null && typeof p.id === 'string' && (p.owner?.id === userId || p.collaborative === true)
+      ? [{ id: p.id, name: p.name ?? '', uri: p.uri ?? `spotify:playlist:${p.id}`, total: p.items?.total ?? 0 }]
+      : [],
+  )
+  return { rows, next: nextOffset(json) }
+}
+
+type EntryJson = { item?: { name?: string; artists?: { name?: string }[]; show?: { name?: string } } | null }
+
+/**
+ * A page of `GET /v1/playlists/{id}/items`. An entry with no item (no longer
+ * available) gets no row; each row keeps its position in the playlist.
+ */
+export function parseItems(reply: Reply | null): Page<TrackRow> | null {
+  const json = reply === null ? null : parseJson<PageJson<EntryJson | null>>(reply.status, reply.text)
+  if (json === null) return null
+  const start = json.offset ?? 0
+  const rows = (json.items ?? []).flatMap((e, i) => {
+    const item = e?.item
+    if (item === null || item === undefined) return []
+    const artist = item.artists !== undefined ? item.artists.map(a => a.name ?? '').filter(n => n !== '').join(', ') : (item.show?.name ?? '')
+    return [{ position: start + i, title: item.name ?? '', artist }]
+  })
+  return { rows, next: nextOffset(json) }
 }

@@ -26,6 +26,7 @@ Run all three checks before calling work done. `/hum-demo` inside Claude Code gi
 - `hooks/spotify.ts`: maps Commands to Web API calls and parses Spotify's replies. Pure.
 - `hooks/demo.ts`: Demo mode, a fake Web API answering in Spotify's JSON. Pure.
 - `hooks/auth.ts`: PKCE, the authorize URL, redirect and token parsing, the node helper script. Pure.
+- `hooks/picker.tsx`: draws the Playlist picker (`/hum-playlist`). Pure.
 - `hooks/bar/`: drawing. `draw.tsx` (layouts), `look.ts` (palettes, widths), `pixels.ts` (kitty images), `seek.tsx` (Client module for the Seek bar).
 - `types/index.d.ts`: the plugin's state contract. It can't import, so it restates some types.
 - `tests/`: `helpers.ts` plus one file per area. `prototypes/` holds throwaway work; its tests are `*.proto-tests.tsx` so the suite skips them.

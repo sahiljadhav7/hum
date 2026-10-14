@@ -42,7 +42,7 @@ This document replaces the tmux, standalone, and title/artist plan in `idea.md`.
 | --- | --- |
 | `/hum-login` | With no argument: the one-time Developer app setup steps (the dashboard link, the exact redirect URI `http://127.0.0.1:8898/callback`, the scopes). `/hum-login <client-id>` opens the Spotify login in the browser (wslview or PowerShell's `Start-Process` under WSL, `open` on macOS, `xdg-open` on Linux), with PKCE and no client secret. A `node` helper on 127.0.0.1:8898, started before the browser opens, catches the redirect and finishes on its own. Without `node`, or if the helper can't listen, paste the address the browser lands on: `/hum-login <that URL>` (the Bar says so). Later, `/hum-login` with no argument logs in again with the stored client ID. Tokens are kept in `$.store` and refreshed a minute before they expire, or on a `401` (with one retry). A failure on Spotify's side (5xx, no answer) is temporary and doesn't log you out. A free account (`403 PREMIUM_REQUIRED`) gets `hum: Spotify Premium is needed to control playback`, and hum stops sending until the next login. |
 | `/hum-logout` | Forgets the login (client ID and tokens). The Bar goes back to `hum: run /hum-login`. |
-| `/hum-playlist` | Opens a pane listing the user's playlists, then the chosen playlist's tracks. Picking a track plays it on the Active device. |
+| `/hum-playlist` | Opens the Playlist picker: the playlists the user owns or collaborates on, then the chosen playlist's tracks. Picking a track plays it within its playlist on the Active device, and the pane closes. See [Playlist picker](#playlist-picker). |
 | `/hum-style` | Switches the look: Glossy (default), Minimal or Glass. With no argument it shows the choices; the choice is remembered across sessions. |
 | `/hum-demo` | Turns Demo mode on or off for the session. A fake Web API inside hum answers the real client's requests in Spotify's own JSON, so the client and its parser run end to end. `/hum-demo no-device` and `/hum-demo no-volume` toggle simulations of no Active device and of a Device without remote volume (they turn Demo mode on). |
 
@@ -116,6 +116,23 @@ hum shows no Cover (album image) in any terminal ([ADR 0004](docs/adr/0004-drop-
 What issue 04 learned, kept in case the Cover returns (`prototypes/02-cover/`, the issue 04 Answer):
 - `$.http.fetch` returns the body as UTF-8 text and destroys a JPEG. The bytes came through `curl -o <file>` and `$.fs.read(file, { as: 'bytes' })` ([ADR 0003](docs/adr/0003-cover-bytes-through-curl.md), now superseded).
 - jpeg-js, vendored, decodes a 64 px cover in about 1 ms inside the engine. Call it with `{ useTArray: true }`.
+
+## Playlist picker
+
+A Claude Code pane (`$.ui.open`, id `hum-playlist`, title "Playlists"), opened with the keyboard and closed by Esc.
+
+```
+Late night code · 3 tracks
+Road trip · 12 tracks
+More…
+```
+
+- **Rows**: one plain `Button` each, in the theme's `text` with the dim part dimmed, cut with `…` to the pane's width. Playlists show `name · N tracks`. Inside one, the rows are `← Playlists`, the playlist's name in bold, then `title · artist` per track.
+- **Only the user's own and collaborative playlists.** Since March 2026 Spotify returns a playlist's items (`GET /v1/playlists/{id}/items`) only to its owner or collaborators, so followed playlists aren't listed. Ownership is the playlist's `owner.id` against `GET /v1/me`.
+- **50 at a time**: a `More…` row at the bottom loads the next 50. The pane scrolls a list taller than itself.
+- **A track plays within its playlist**: `PUT /v1/me/player/play` with the playlist's `context_uri` and `offset.position`, so next and previous follow it. Unavailable entries get no row but keep their place in the count.
+- **A line at the top** in the theme's `warning` says why a pick didn't play: no Active device (hum's last poll said so, or Spotify answered `404`), hum not sending (logged out, a free account, or a back-off: the Bar says which), or Spotify's status. The pane stays open then; it closes only once Spotify accepts the play.
+- **Not logged in**: `/hum-playlist` answers `hum: run /hum-login first to see your playlists.` and opens nothing.
 
 ## Later
 

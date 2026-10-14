@@ -5,17 +5,18 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
-import type { DemoPlayer, Style } from '../types'
+import type { DemoPlayer, Picker, PlaylistRow, Style, TrackRow } from '../types'
 import { authorizeUrl, challengeOf, formOf, HELPER_SCRIPT, isClientId, parseRedirect, parseTokenReply, randomToken, REDIRECT_URI, SETUP_STEPS, TOKEN_URL } from './auth'
 import type { Auth, PendingLogin, TokenReply } from './auth'
 import { drawBar } from './bar/draw'
 import type { Caps } from './bar/draw'
 import { isStyle, STYLE_NAMES, STYLES } from './bar/look'
 import { demoAnswer, demoPlayer } from './demo'
-import { HINT_LOGIN, HINT_PASTE, HINT_PREMIUM, idle } from './player'
+import { drawPicker } from './picker'
+import { HINT_LOGIN, HINT_NO_DEVICE, HINT_PASTE, HINT_PREMIUM, idle } from './player'
 import type { Command } from './player'
-import { callFor, GET_PLAYER, muteTarget, parsePlayer, urlOf } from './spotify'
-import type { ApiCall } from './spotify'
+import { appendPage, callFor, GET_ME, GET_PLAYER, itemsCall, muteTarget, parseItems, parseMe, parsePlayer, parsePlaylists, playCall, playlistsCall, urlOf } from './spotify'
+import type { ApiCall, Reply } from './spotify'
 
 /** How often Now playing is read from Spotify. */
 const POLL_MS = 4_000
@@ -27,6 +28,15 @@ const mutedFrom = atom({ plugin: 'hum', key: 'mutedFrom' } as const, null as num
 const pendingLogin = atom({ plugin: 'hum', key: 'pendingLogin' } as const, null as PendingLogin | null)
 const refusedToken = atom({ plugin: 'hum', key: 'refusedToken' } as const, null as string | null)
 const premiumRequired = atom({ plugin: 'hum', key: 'premiumRequired' } as const, false)
+const picker = atom({ plugin: 'hum', key: 'picker' } as const, {
+  userId: '',
+  playlists: { rows: [], next: null },
+  open: null,
+  note: '',
+} as Picker)
+
+/** The Playlist picker's pane. */
+const PICKER_PANE = 'hum-playlist'
 
 // The latest poll; an older one that answers late doesn't overwrite it.
 // (A module variable: a reload starts it over, which is harmless.)
@@ -36,8 +46,6 @@ let latestPoll = 0
 // spending the same refresh token (which Spotify may rotate). Module variable.
 let refreshing: Promise<RefreshResult> | null = null
 const styleRef = { plugin: 'hum', key: 'style' } as const
-
-type Reply = { status: number; text: string }
 
 /** Refresh this long before the access token expires. */
 const REFRESH_EARLY_MS = 60_000
@@ -121,8 +129,8 @@ async function api($: EngineInterface, call: ApiCall): Promise<Reply | null> {
   const send = (bearer: string) =>
     $.http.fetch(urlOf(call), {
       method: call.method,
-      headers: { Authorization: `Bearer ${bearer}` },
-      ...(call.method === 'GET' ? {} : { body: '' }),
+      headers: { Authorization: `Bearer ${bearer}`, ...(call.body === undefined ? {} : { 'Content-Type': 'application/json' }) },
+      ...(call.method === 'GET' ? {} : { body: call.body === undefined ? '' : JSON.stringify(call.body) }),
     })
   let res = await send(token)
   let isRefused = false
@@ -213,6 +221,80 @@ async function runDemo($: EngineInterface, args: string) {
   const isSimulating = what === 'no-device' ? !next.hasDevice : !next.canSetVolume
   const label = what === 'no-device' ? 'no active device' : 'volume not supported'
   return { text: `hum: Demo mode on; simulating "${label}" ${isSimulating ? 'on' : 'off'}.` }
+}
+
+const NOTE_NO_DEVICE = `${HINT_NO_DEVICE}. Start playing in Spotify on a device, then pick again.`
+
+/**
+ * Why a Playlist picker request failed. No reply means hum isn't sending
+ * (logged out, a free account, or backing off after a 429); the Bar says which.
+ */
+const failureNote = (reply: Reply | null) =>
+  reply === null ? 'hum isn\'t sending to Spotify right now; the Bar says why.' : `Spotify answered ${reply.status}. Try again.`
+
+/** /hum-playlist: loads the first page of the user's playlists and opens the Playlist picker. */
+async function runPlaylist($: EngineInterface) {
+  if (!(await read($, demo)).isOn && (await accessToken($)) === null) return { text: 'hum: run /hum-login first to see your playlists.' }
+  const me = await api($, GET_ME)
+  const userId = parseMe(me)
+  if (userId === null) return { text: `hum: couldn't load your playlists. ${failureNote(me)}` }
+  const reply = await api($, playlistsCall(0))
+  const playlists = parsePlaylists(reply, userId)
+  if (playlists === null) return { text: `hum: couldn't load your playlists. ${failureNote(reply)}` }
+  await update($, picker, () => ({ userId, playlists, open: null, note: '' }))
+  await $.ui.open({ id: PICKER_PANE, title: 'Playlists', focus: true, closeOnEscape: true })
+  return { text: 'hum: your playlists are open.' }
+}
+
+async function openPlaylist($: EngineInterface, playlist: PlaylistRow) {
+  const reply = await api($, itemsCall(playlist.id, 0))
+  const tracks = parseItems(reply)
+  await update($, picker, p =>
+    tracks === null
+      ? { ...p, note: reply?.status === 403 ? "hum: Spotify doesn't share this playlist's tracks." : `hum: ${failureNote(reply)}` }
+      : { ...p, open: { playlist, tracks }, note: '' },
+  )
+}
+
+/** The More row: the next page of whichever list is showing. */
+async function loadMore($: EngineInterface) {
+  const p = await read($, picker)
+  const open = p.open
+  const next = (open === null ? p.playlists : open.tracks).next
+  if (next === null) return
+  const reply = await api($, open === null ? playlistsCall(next) : itemsCall(open.playlist.id, next))
+  await update($, picker, cur => {
+    // Back, or another playlist opened, while the page loaded: it belongs to a list no longer shown.
+    if (cur.open?.playlist.id !== open?.playlist.id) return cur
+    if (cur.open === null) {
+      const page = parsePlaylists(reply, cur.userId)
+      return page === null ? { ...cur, note: `hum: ${failureNote(reply)}` } : { ...cur, playlists: appendPage(cur.playlists, page), note: '' }
+    }
+    const page = parseItems(reply)
+    return page === null
+      ? { ...cur, note: `hum: ${failureNote(reply)}` }
+      : { ...cur, open: { ...cur.open, tracks: appendPage(cur.open.tracks, page) }, note: '' }
+  })
+}
+
+/** Plays `track` within the open playlist on the Active device, then closes the pane. */
+async function playTrack($: EngineInterface, track: TrackRow) {
+  const p = await read($, picker)
+  const np = await read($, nowPlaying)
+  if (p.open === null) return
+  if (np.kind === 'idle' && np.hint === HINT_NO_DEVICE) {
+    await update($, picker, cur => ({ ...cur, note: NOTE_NO_DEVICE }))
+    return
+  }
+  const reply = await api($, playCall(p.open.playlist.uri, track.position))
+  if (reply !== null && reply.status < 300) {
+    await update($, picker, cur => ({ ...cur, note: '' }))
+    await $.ui.close({ id: PICKER_PANE })
+    await poll($)
+    return
+  }
+  // Spotify answers 404 when it has no Active device after all (the last poll was up to 4 s ago).
+  await update($, picker, cur => ({ ...cur, note: reply?.status === 404 ? NOTE_NO_DEVICE : `hum: ${failureNote(reply)}` }))
 }
 
 /** Runs a host command; its result, or null if it couldn't run. */
@@ -420,6 +502,10 @@ export const register: Register = on => {
       description: 'Forget your Spotify login (client ID and tokens)',
     })
     await $.command.register({
+      name: 'hum-playlist',
+      description: 'Browse your Spotify playlists and play a track',
+    })
+    await $.command.register({
       name: 'hum-demo',
       description: 'Toggle hum Demo mode (a fake Spotify); no-device / no-volume simulate those cases',
       argumentHint: '[no-device|no-volume]',
@@ -433,8 +519,18 @@ export const register: Register = on => {
   on('command.run', { command: 'hum-demo' }, async ($, e) => runDemo($, e.args ?? ''))
   on('command.run', { command: 'hum-login' }, async ($, e) => runLogin($, e.args ?? ''))
   on('command.run', { command: 'hum-logout' }, async $ => runLogout($))
+  on('command.run', { command: 'hum-playlist' }, async $ => runPlaylist($))
 
   on('ui.render', { component: 'PromptHint' }, async ($, e) => drawUnderPrompt($, e as never, e.viewport?.columns ?? 80))
+
+  on('ui.render', { component: 'Pane', requestId: PICKER_PANE }, async ($, e) =>
+    drawPicker($.ui.resolve(e) as Record<string, any>, await read($, picker), e.props.bodyColumns, {
+      openPlaylist: playlist => openPlaylist($, playlist),
+      back: () => update($, picker, p => ({ ...p, open: null, note: '' })),
+      more: () => loadMore($),
+      play: track => playTrack($, track),
+    }),
+  )
 
   // The Seek bar (hooks/bar/seek.tsx) posts where it was clicked.
   on('ui.message', { module: 'hooks/bar/seek.tsx' }, async ($, e, next) => {

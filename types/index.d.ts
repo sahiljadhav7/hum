@@ -48,6 +48,24 @@ export type DemoPlayer = {
   canSetVolume: boolean
 }
 
+/** One page of a list from the Web API: its rows, and the offset of the next page (null after the last). */
+export type Page<R> = { rows: R[]; next: number | null }
+
+/** A playlist the user owns or collaborates on, as the Playlist picker lists it. */
+export type PlaylistRow = { id: string; name: string; uri: string; total: number }
+
+/** A track in a playlist; `position` is its place in the playlist, from 0. */
+export type TrackRow = { position: number; title: string; artist: string }
+
+/** The Playlist picker (/hum-playlist): the playlists, the one opened, and a line to show above them. */
+export type Picker = {
+  userId: string
+  playlists: Page<PlaylistRow>
+  open: { playlist: PlaylistRow; tracks: Page<TrackRow> } | null
+  /** Empty, or why the last pick didn't play. */
+  note: string
+}
+
 declare module 'claude-code' {
   interface PluginState {
     hum: {
@@ -66,6 +84,8 @@ declare module 'claude-code' {
       /** Spotify said the account needs Premium (403 PREMIUM_REQUIRED); nothing more is sent until the next login. */
       premiumRequired: boolean
       style: Style
+      /** The Playlist picker's contents while its pane is open. */
+      picker: Picker
     }
   }
 }

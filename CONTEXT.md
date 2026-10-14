@@ -52,3 +52,7 @@ _Avoid_: Spotify app (that means the desktop player), client
 
 **Demo mode**:
 Running the Bar against a fake Spotify service instead of the real one, so the UI can be exercised without an account.
+
+**Playlist picker**:
+The Claude Code pane `/hum-playlist` opens: the playlists the user owns or collaborates on, then one playlist's tracks. Picking a track plays it within that playlist on the Active device, and the pane closes.
+_Avoid_: Playlist browser, menu, library
