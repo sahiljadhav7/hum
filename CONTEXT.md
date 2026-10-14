@@ -21,10 +21,10 @@ A Spotify Connect endpoint (desktop app, phone, speaker) that plays audio for th
 _Avoid_: Output, source
 
 **Active device**:
-The Device currently holding the Player's playback session. Without one, the Bar is idle.
+The Device currently holding the Player's playback session. Without one, the Bar keeps the last track, paused, and ▶ wakes a Device.
 
 **Idle state**:
-What the Bar shows when it can't control anything (no Active device, or not logged in yet): one dim line of hint text in place of the Controls.
+What the Bar shows when hum can't control anything (not logged in, a free account, a login waiting to be pasted, an ad playing): one dim line of hint text in place of the Controls. No Active device is not an Idle state (issue 09).
 
 **Now playing**:
 The track, its artists, progress, duration, and the Player's play, shuffle, repeat and volume state at a moment in time.

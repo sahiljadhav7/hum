@@ -31,6 +31,10 @@ export type NowPlaying =
       volume: number
       /** False when the Active device doesn't allow remote volume. */
       canSetVolume: boolean
+      /** False once Spotify dropped the Device (or there was none): the Bar keeps the last track, paused. */
+      hasDevice: boolean
+      /** The Device last seen playing, to wake with ▶; '' if none yet. */
+      deviceId: string
     }
 
 /** Demo mode's fake Spotify: the state behind its Web API answers. */
@@ -88,6 +92,8 @@ declare module 'claude-code' {
       style: Style
       /** The Playlist picker's contents while its pane is open. */
       picker: Picker
+      /** A short note the Bar shows in place of the title until `until` (ms since epoch). */
+      barNote: { text: string; until: number }
     }
   }
 }

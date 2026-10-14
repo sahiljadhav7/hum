@@ -11,11 +11,11 @@ import type { Auth, PendingLogin, TokenReply } from './auth'
 import { drawBar } from './bar/draw'
 import type { Caps } from './bar/draw'
 import { isStyle, STYLE_NAMES, STYLES } from './bar/look'
-import { demoAnswer, demoPlayer } from './demo'
+import { demoAnswer, demoPlayer, dropDevice } from './demo'
 import { drawPicker } from './picker'
 import { HINT_LOGIN, HINT_NO_DEVICE, HINT_PASTE, HINT_PREMIUM, idle } from './player'
-import type { Command } from './player'
-import { appendPage, callFor, GET_ME, GET_PLAYER, itemsCall, muteTarget, parseItems, parseMe, parsePlayer, parsePlaylists, playCall, playlistsCall, urlOf } from './spotify'
+import type { Command, Playing } from './player'
+import { appendPage, callFor, GET_DEVICES, GET_ME, GET_PLAYER, itemsCall, muteTarget, parseItems, parseMe, parsePlayer, parsePlaylists, pickDevice, playCall, playlistsCall, transferCall, urlOf } from './spotify'
 import type { ApiCall, Reply } from './spotify'
 
 /** How often Now playing is read from Spotify. */
@@ -34,6 +34,13 @@ const picker = atom({ plugin: 'hum', key: 'picker' } as const, {
   open: null,
   note: '',
 } as Picker)
+
+const barNote = atom({ plugin: 'hum', key: 'barNote' } as const, { text: '', until: 0 })
+
+/** How long a note shows in the Bar in place of the title. */
+const NOTE_MS = 5_000
+const NOTE_OPEN_SPOTIFY = 'Open Spotify on your phone or computer, then ▶'
+const NOTE_PRESS_PLAY = 'No active device: press ▶ to start one'
 
 /** The Playlist picker's pane. */
 const PICKER_PANE = 'hum-playlist'
@@ -177,14 +184,42 @@ async function poll($: EngineInterface) {
   if (reply === null || poll !== latestPoll) return
   const at = await $.clock.now()
   // An error (429, 401, 5xx...) keeps the Now playing hum had.
-  const np = parsePlayer(reply.status, reply.text, at)
+  const np = parsePlayer(reply.status, reply.text, at, await read($, nowPlaying))
   if (np !== null) await update($, nowPlaying, () => np)
+}
+
+/** Shows `text` in the Bar in place of the title for a few seconds. */
+async function showNote($: EngineInterface, text: string) {
+  const until = (await $.clock.now()) + NOTE_MS
+  await update($, barNote, () => ({ text, until }))
+  // Clear it on time, so the Bar redraws without waiting for the next poll.
+  $.clock.after(NOTE_MS, () => void update($, barNote, n => (n.until === until ? { text: '', until: 0 } : n)))
+}
+
+/**
+ * ▶ with no Active device: move playback to the Device last seen (or the first
+ * usable one) and start it there. The Bar says so if there's none to wake.
+ */
+async function wake($: EngineInterface, np: Playing) {
+  const deviceId = pickDevice(await api($, GET_DEVICES), np.deviceId)
+  const moved = deviceId === null ? null : await api($, transferCall(deviceId))
+  if (deviceId === null || moved === null || moved.status >= 300) return showNote($, NOTE_OPEN_SPOTIFY)
+  const at = await $.clock.now()
+  await update($, barNote, () => ({ text: '', until: 0 }))
+  // Show it playing now: the poll right after a transfer may not see the Device yet.
+  await update($, nowPlaying, cur => (cur.kind === 'playing' ? { ...cur, isPlaying: true, at, hasDevice: true, deviceId } : cur))
 }
 
 /** A click: send its request, then read Now playing again right away. */
 async function send($: EngineInterface, cmd: Command) {
   const np = await read($, nowPlaying)
   if (np.kind !== 'playing') return
+  if (!np.hasDevice) {
+    // Only ▶ can start a Device; the other Controls would get a 404.
+    if (cmd.type === 'toggle') await wake($, np)
+    else await showNote($, NOTE_PRESS_PLAY)
+    return
+  }
   if (cmd.type === 'mute') {
     if (!np.canSetVolume) return
     const restore = await read($, mutedFrom)
@@ -217,7 +252,9 @@ async function runDemo($: EngineInterface, args: string) {
   const d = await read($, demo)
   const player = d.isOn ? d.player : demoPlayer(now)
   const next =
-    what === 'no-device' ? { ...player, hasDevice: !player.hasDevice } : { ...player, canSetVolume: !player.canSetVolume }
+    what === 'no-device'
+      ? player.hasDevice ? dropDevice(player, now) : { ...player, hasDevice: true }
+      : { ...player, canSetVolume: !player.canSetVolume }
   await update($, demo, () => ({ isOn: true, player: next }))
   await poll($)
   const isSimulating = what === 'no-device' ? !next.hasDevice : !next.canSetVolume
@@ -294,7 +331,7 @@ async function playTrack($: EngineInterface, track: TrackRow) {
   const p = await read($, picker)
   const np = await read($, nowPlaying)
   if (p.open === null) return
-  if (np.kind === 'idle' && np.hint === HINT_NO_DEVICE) {
+  if (np.kind === 'playing' && !np.hasDevice) {
     await update($, picker, cur => ({ ...cur, note: NOTE_NO_DEVICE }))
     return
   }
@@ -500,7 +537,9 @@ async function drawUnderPrompt($: EngineInterface, e: Parameters<EngineInterface
   const el = $.ui.resolve(e as never) as Record<string, any>
   const caps = e.surface === 'terminal' ? await readCaps($) : { noColor: false, truecolor: true, images: false }
   const np = await read($, nowPlaying)
-  return drawBar(el, np, { style: await chosenStyle($), columns, now: await $.clock.now(), caps }, cmd => send($, cmd))
+  const now = await $.clock.now()
+  const note = await read($, barNote)
+  return drawBar(el, np, { style: await chosenStyle($), columns, now, caps, note: now < note.until ? note.text : '' }, cmd => send($, cmd))
 }
 
 export const register: Register = on => {

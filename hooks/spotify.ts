@@ -3,7 +3,7 @@
 // requests (through $.http.fetch, or Demo mode).
 // Reference: https://developer.spotify.com/documentation/web-api (Player, Playlists).
 import type { NowPlaying, Page, PlaylistRow, TrackRow } from '../types'
-import { DEFAULT_VOLUME, HINT_AD, HINT_NO_DEVICE, HINT_NOTHING, idle, nextRepeat } from './player'
+import { DEFAULT_VOLUME, HINT_AD, idle, nextRepeat, stopped } from './player'
 import type { Command, Playing } from './player'
 
 export const API = 'https://api.spotify.com/v1'
@@ -57,7 +57,7 @@ type PlayerJson = {
   progress_ms?: number | null
   shuffle_state?: boolean
   repeat_state?: string
-  device?: { volume_percent?: number | null; supports_volume?: boolean } | null
+  device?: { id?: string | null; volume_percent?: number | null; supports_volume?: boolean } | null
   item?: {
     id?: string
     uri?: string
@@ -84,17 +84,19 @@ export const parseRepeat = (state: string | undefined) => (state === 'context' |
 
 /**
  * Now playing from a successful `GET /v1/me/player` answer (200 or 204); `at`
- * is when it was read. Null for anything else (an error, a body that isn't
- * JSON): the caller keeps the Now playing it had.
+ * is when it was read, `prev` what the Bar showed. With no Device (204) or
+ * nothing loaded, the Bar keeps `prev`'s track, paused. Null for anything else
+ * (an error, a body that isn't JSON): the caller keeps the Now playing it had.
  */
-export function parsePlayer(status: number, text: string, at: number): NowPlaying | null {
-  if (status === 204 || (status === 200 && text.trim() === '')) return idle(HINT_NO_DEVICE)
+export function parsePlayer(status: number, text: string, at: number, prev: NowPlaying): NowPlaying | null {
+  if (status === 204 || (status === 200 && text.trim() === '')) return stopped(prev, at, false, '')
   const json = parseJson<PlayerJson>(status, text)
   if (json === null) return null
-  if (!json.device) return idle(HINT_NO_DEVICE)
+  if (!json.device) return stopped(prev, at, false, '')
   if (json.currently_playing_type === 'ad') return idle(HINT_AD)
+  const deviceId = json.device.id ?? ''
   const item = json.item
-  if (!item) return idle(HINT_NOTHING)
+  if (!item) return stopped(prev, at, true, deviceId)
   const isEpisode = item.type === 'episode'
   return {
     kind: 'playing',
@@ -113,7 +115,26 @@ export function parsePlayer(status: number, text: string, at: number): NowPlayin
     repeat: parseRepeat(json.repeat_state),
     volume: Math.max(0, Math.min(100, json.device.volume_percent ?? 0)) / 100,
     canSetVolume: json.device.supports_volume !== false,
+    hasDevice: true,
+    deviceId,
   }
+}
+
+// Waking a Device when none is active (issue 09).
+export const GET_DEVICES: ApiCall = { method: 'GET', path: '/me/player/devices' }
+
+/** Transfer Playback to `deviceId` and start playing there. */
+export const transferCall = (deviceId: string): ApiCall => ({ method: 'PUT', path: '/me/player', body: { device_ids: [deviceId], play: true } })
+
+/**
+ * The Device to wake from a `GET /v1/me/player/devices` answer: `lastId` if
+ * Spotify still lists it, else the first that has an id and takes commands
+ * (a restricted Device takes none). Null if there is none.
+ */
+export function pickDevice(reply: Reply | null, lastId: string): string | null {
+  const json = reply === null ? null : parseJson<{ devices?: { id?: string | null; is_restricted?: boolean }[] }>(reply.status, reply.text)
+  const usable = (json?.devices ?? []).flatMap(d => (typeof d.id === 'string' && d.is_restricted !== true ? [d.id] : []))
+  return usable.includes(lastId) ? lastId : (usable[0] ?? null)
 }
 
 // The Playlist picker. Spotify pages lists 50 at a time at most.

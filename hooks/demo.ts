@@ -71,6 +71,9 @@ function advance(p: DemoPlayer, now: number): DemoPlayer {
   return goTo(p, step(p, 1), now)
 }
 
+/** `/hum-demo no-device`: Spotify drops the Device, and playback stops where it was. */
+export const dropDevice = (p: DemoPlayer, now: number): DemoPlayer => ({ ...p, hasDevice: false, isPlaying: false, positionMs: positionOf(p, now), anchoredAt: now })
+
 export type DemoAnswer = { player: DemoPlayer; status: number; body?: unknown }
 
 /** The `GET /v1/me/player` body for the fake player, in Spotify's shape. */
@@ -97,6 +100,14 @@ const playerJson = (p: DemoPlayer, now: number) => {
 /** Spotify's answer to `call` at `now`, and the fake player after it. */
 export function demoAnswer(player: DemoPlayer, call: ApiCall, now: number): DemoAnswer {
   const p = advance(player, now)
+  // The demo Device, listed whether active or not; a transfer to it makes it active.
+  if (call.method === 'GET' && call.path === '/me/player/devices')
+    return { player: p, status: 200, body: { devices: [{ id: 'demo', is_active: p.hasDevice, is_private_session: false, is_restricted: false, name: 'hum demo', type: 'Computer', volume_percent: p.volumePercent, supports_volume: p.canSetVolume }] } }
+  if (call.method === 'PUT' && call.path === '/me/player') {
+    const body = call.body as { device_ids?: string[]; play?: boolean } | undefined
+    if (body?.device_ids?.[0] !== 'demo') return { player: p, status: 404 }
+    return { player: { ...p, hasDevice: true, isPlaying: body.play === true ? true : p.isPlaying, positionMs: positionOf(p, now), anchoredAt: now }, status: 204 }
+  }
   // Without a Device only the player answers differently; the playlists are still there.
   if (!p.hasDevice && call.path.startsWith('/me/player')) return { player: p, status: call.method === 'GET' ? 204 : 404 }
   // Pin the position to `now`, so every change starts from the truth.

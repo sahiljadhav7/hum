@@ -25,7 +25,19 @@ export type BarInput = {
   columns: number
   now: number
   caps: Caps
+  /** A short note to show in place of the title, or ''. */
+  note: string
 }
+
+/** The title row: the track and its artist, or a quiet line (a note, or nothing playing). */
+type Heading = { title: string; artist: string; isQuiet: boolean }
+
+const headingOf = (np: Playing, note: string): Heading =>
+  note !== ''
+    ? { title: note, artist: '', isQuiet: true }
+    : np.track.title === ''
+      ? { title: 'Nothing playing', artist: '', isQuiet: true }
+      : { title: np.track.title, artist: np.track.artist, isQuiet: false }
 
 export type Press = (cmd: Command) => unknown
 
@@ -133,8 +145,9 @@ function drawLinear(el: El, np: Playing, input: BarInput, press: Press, mode: 'g
   const line = Math.max(SEEK_MIN, Math.min(SEEK_MAX, room - fixed))
   const width = fixed + line
 
-  const rest = ` · ${np.track.artist}`
-  const title = fit(np.track.title, Math.max(4, width - cells(rest)))
+  const heading = headingOf(np, input.note)
+  const rest = heading.artist === '' ? '' : ` · ${heading.artist}`
+  const title = fit(heading.title, Math.max(4, width - cells(rest)))
   const shownRest = fit(rest, Math.max(0, width - cells(title)))
   const lead = Math.max(0, width - cells(title) - cells(shownRest))
   const space = (n: number, row: 0 | 1) => <Text backgroundColor={bg[row]}>{' '.repeat(Math.max(0, n))}</Text>
@@ -170,7 +183,12 @@ function drawLinear(el: El, np: Playing, input: BarInput, press: Press, mode: 'g
       <Box flexDirection="column" width={width}>
         <Box flexDirection="row">
           {space(lead, 0)}
-          <Text color={ink.title} backgroundColor={bg[0]} bold>
+          <Text
+            color={heading.isQuiet ? ink.artist : ink.title}
+            dimColor={heading.isQuiet && ink.artist === undefined}
+            backgroundColor={bg[0]}
+            bold={!heading.isQuiet}
+          >
             {title}
           </Text>
           <Text color={ink.artist} dimColor={ink.artist === undefined} backgroundColor={bg[0]}>
@@ -198,6 +216,7 @@ function drawLinear(el: El, np: Playing, input: BarInput, press: Press, mode: 'g
 function drawGlass(el: El, np: Playing, input: BarInput, press: Press) {
   const { Box, Text, Client, Image } = el
   const { caps } = input
+  const heading = headingOf(np, input.note)
   const palette = caps.truecolor ? GLASS.truecolor : GLASS.graphite
   const rowBg = caps.images ? palette.rows : [palette.flat, palette.flat, palette.flat]
   const cardBg = caps.images ? palette.card : [palette.flatCard, palette.flatCard, palette.flatCard]
@@ -248,11 +267,11 @@ function drawGlass(el: El, np: Playing, input: BarInput, press: Press) {
         {middle('controls', CONTROLS_CELLS, controls(el, np, palette.ink, rowBg[1], press))}
         {blank('gap-1', 3)}
         <Box key="card" flexDirection="column">
-          <Text backgroundColor={cardBg[0]} color={palette.ink.title} bold>
-            {' ' + pad(fit(np.track.title, titleCells)) + ' '}
+          <Text backgroundColor={cardBg[0]} color={heading.isQuiet ? palette.ink.artist : palette.ink.title} bold={!heading.isQuiet}>
+            {' ' + pad(fit(heading.title, titleCells)) + ' '}
           </Text>
           <Text backgroundColor={cardBg[1]} color={palette.ink.artist}>
-            {' ' + pad(fit(np.track.artist, titleCells)) + ' '}
+            {' ' + pad(fit(heading.artist, titleCells)) + ' '}
           </Text>
           <Box flexDirection="row">
             <Text backgroundColor={cardBg[2]}> </Text>

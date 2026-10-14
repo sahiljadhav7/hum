@@ -61,7 +61,7 @@ A `/plugin install` line comes later, when hum is packaged for sharing.
 | --- | --- |
 | `/hum-style [glossy\|minimal\|glass]` | Switches the Look. With no argument, shows the current Look and the choices. Remembered across sessions. |
 | `/hum-demo` | Turns Demo mode (a fake Spotify inside hum) on or off for this session. |
-| `/hum-demo no-device` | Simulates "no active Spotify device" in Demo mode. |
+| `/hum-demo no-device` | Simulates Spotify dropping the device in Demo mode: playback stops, the Bar stays, and ▶ wakes the demo device. |
 | `/hum-demo no-volume` | Simulates a device that doesn't allow remote volume (the volume icon greys out). |
 | `/hum-login [client-id \| redirect URL]` | Logs in to Spotify. With no argument, shows the one-time setup. |
 | `/hum-logout` | Forgets the login. |
@@ -69,12 +69,12 @@ A `/plugin install` line comes later, when hum is packaged for sharing.
 
 ## What the Bar shows when it can't play
 
+When the music stops the Bar stays, showing the last track paused (or `Nothing playing`), and ▶ starts Spotify again on your phone or computer if one has Spotify open. It's replaced by a hint only when hum can't control anything:
+
 | Hint | Meaning |
 | --- | --- |
 | `hum: run /hum-login` | Not logged in to Spotify, or the login expired and couldn't be refreshed. |
 | `hum: Spotify Premium is needed to control playback` | The account is free. Spotify only lets Premium accounts control playback. |
-| `hum: no active Spotify device` | Nothing is playing on any Spotify device. Start Spotify somewhere. |
-| `hum: nothing playing` | A device is active but has nothing loaded. |
 | `hum: ad playing` | Spotify is playing an ad. |
 
 ## Roadmap
@@ -89,6 +89,7 @@ A `/plugin install` line comes later, when hum is packaged for sharing.
 | 06 | `/hum-playlist` | Done |
 | 07 | Package for `/plugin install` | Planned |
 | 08 | Playlist picker as a Card and Table; command reply fixes | Done |
+| 09 | The Bar stays active when the music stops | Done |
 
 The issues live in [`.scratch/hum/issues/`](.scratch/hum/issues/).
 

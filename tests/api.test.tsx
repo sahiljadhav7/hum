@@ -31,14 +31,14 @@ test('logged in, hum reads Now playing from Spotify with the token and draws it'
   await ui.unmount()
 })
 
-test('a 204 from Spotify (no Active device) is the Idle hint, no Controls', async ($, on) => {
+test('a 204 from Spotify (no Active device) keeps the Controls, with nothing playing', async ($, on) => {
   setup(on, {}, LOGGED_IN)
   spotify(on, () => ({ status: 204 }))
   await startSession($, on)
   const ui = await bar($)
-  const hint = await ui.find({ type: 'Text', text: 'hum: no active Spotify device' })
-  expect(hint?.props?.dimColor).toBe(true)
-  expect(await ui.find({ key: 'play' })).toBeUndefined()
+  expect(await ui.find({ type: 'Text', text: 'hum: no active Spotify device' })).toBeUndefined()
+  expect(await ui.find({ type: 'Text', text: /Nothing playing/ })).toBeDefined()
+  expect(await ui.find({ key: 'play' })).toBeDefined()
   await ui.unmount()
 })
 
@@ -177,13 +177,13 @@ test("Demo mode's fake Spotify keeps its state across requests", async ($, on) =
   await ui.unmount()
 })
 
-test('/hum-demo no-device simulates no Active device: the Idle hint', async ($, on) => {
+test('/hum-demo no-device simulates no Active device: the Bar stays, nothing playing', async ($, on) => {
   setup(on)
   await startSession($, on)
   expect(await demo($, 'no-device')).toBe('Demo mode on; simulating "no active device" on.')
   let ui = await bar($)
-  expect(await ui.find({ type: 'Text', text: 'hum: no active Spotify device' })).toBeDefined()
-  expect(await ui.find({ key: 'play' })).toBeUndefined()
+  expect(await ui.find({ type: 'Text', text: /Nothing playing/ })).toBeDefined()
+  expect(await ui.find({ key: 'play' })).toBeDefined()
   await ui.unmount()
   expect(await demo($, 'no-device')).toBe('Demo mode on; simulating "no active device" off.')
   ui = await bar($)

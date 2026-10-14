@@ -22,7 +22,10 @@ This document replaces the tmux, standalone, and title/artist plan in `idea.md`.
 - **Right-aligned.** As the width shrinks, the right-hand icons drop first, then the Seek bar shrinks.
 - **Height**: two rows (Glossy, Minimal) or three (Glass). The row under the prompt shows them all (confirmed by a user screenshot).
 - **`NO_COLOR`**: Minimal with no colors at all, using only bold, underline and inverse on hover.
-- **Idle state**: one dim hint line in place of the Controls, e.g. `hum: run /hum-login` or `hum: no active Spotify device`.
+- **Idle state**: one dim hint line in place of the Controls, e.g. `hum: run /hum-login`, only when hum can't control anything (not logged in, a free account, an ad).
+- **Stays active when the music stops** (issue 09). When Spotify drops the Device, or has nothing loaded, the Bar keeps the last track, paused (` ▶`), with its Seek bar frozen where it stopped and all its Controls. Before anything has played it shows its Controls with a dim `Nothing playing` in place of the title.
+- **▶ wakes a Device**: with none active, ▶ asks Spotify for the user's Devices (`GET /v1/me/player/devices`) and moves playback to the one last seen playing if it's still listed, else to the first that has an id and isn't restricted (`PUT /v1/me/player`, `{ device_ids: [id], play: true }`). The Bar shows ❚❚ at once. The other Controls send nothing then.
+- **Notes**: for 5 s, a dim line in place of the title says what happened: `Open Spotify on your phone or computer, then ▶` when there's no Device to wake or Spotify refuses the transfer, and `No active device: press ▶ to start one` for another Control.
 - No keyboard shortcuts in v1, and no popups or toasts when a control is used.
 
 ## Spotify
@@ -30,7 +33,7 @@ This document replaces the tmux, standalone, and title/artist plan in `idea.md`.
 - **Web API only**: hum controls whichever Device is active, including a phone or a speaker.
 - Each user creates their own **Developer app** with the redirect URI `http://127.0.0.1:8898/callback`. Premium is required, because the app owner must have it, so free accounts can't use hum.
 - hum polls Now playing every 4 s and polls again right after every action. Between polls the Seek bar moves on locally: each redraw places it from the time of the last poll, and between redraws it ticks forward once a second by itself.
-- Podcasts: the poll asks for episodes too (`additional_types=episode`) and shows the episode and its show. During an ad the Bar says `hum: ad playing`; with a Device but nothing playing, `hum: nothing playing`.
+- Podcasts: the poll asks for episodes too (`additional_types=episode`) and shows the episode and its show. During an ad the Bar says `hum: ad playing`; with a Device but nothing loaded it keeps its Controls, as with no Device.
 - An error reply (5xx, 403...) keeps the last Now playing rather than claiming there's no Device.
 - After a `429`, hum sends nothing until `Retry-After` has passed. A `401` shows `hum: run /hum-login`, and the refused token isn't sent again (issue 03 refreshes it there first).
 - Before `/hum-login` (and with Demo mode off), the Bar is the Idle hint `hum: run /hum-login`.
