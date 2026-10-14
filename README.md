@@ -24,6 +24,16 @@ A Spotify player bar inside [Claude Code](https://claude.com/claude-code). hum d
   - **24-bit color** (`COLORTERM=truecolor`) for the warm brown capsules; without it hum uses a graphite grey palette. On Windows Terminal under WSL, add `export COLORTERM=truecolor` to `~/.bashrc`.
   - **kitty or Ghostty**, for smooth rounded capsule ends.
 
+## Install
+
+In Claude Code, run:
+
+```
+/plugin install hum --marketplace sahiljadhav7/hum
+```
+
+Answer `y` to add the marketplace, then pick a scope. Then try `/hum-demo`, or [log in to Spotify](#log-in-to-spotify).
+
 ## Try it (from source)
 
 ```sh
@@ -52,8 +62,6 @@ The Spotify login opens in your browser; approve it.
 - **Without it**, copy the address the browser lands on (it starts with `http://127.0.0.1:8898/callback`) and run `/hum-login <that address>`.
 
 hum keeps the login between sessions and refreshes it by itself. `/hum-logout` forgets it.
-
-A `/plugin install` line comes later, when hum is packaged for sharing.
 
 ## Commands
 
@@ -87,7 +95,7 @@ When the music stops the Bar stays, showing the last track paused (or `Nothing p
 | 04 | Prototype: decoding the Cover | Done |
 | 05 | Real Cover in the Bar | Dropped ([ADR 0004](docs/adr/0004-drop-the-cover.md)) |
 | 06 | `/hum-playlist` | Done |
-| 07 | Package for `/plugin install` | Planned |
+| 07 | Package for `/plugin install` | Awaiting install check |
 | 08 | Playlist picker as a Card and Table; command reply fixes | Done |
 | 09 | The Bar stays active when the music stops | Done |
 

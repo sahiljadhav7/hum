@@ -1,0 +1,6 @@
+{
+  "name": "hum",
+  "description": "hum: a Spotify player Bar under Claude Code's prompt.",
+  "owner": { "name": "sahiljadhav7" },
+  "plugins": [{ "name": "hum", "source": "./" }]
+}
