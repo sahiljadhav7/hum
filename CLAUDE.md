@@ -17,13 +17,15 @@ claude plugin validate .       # what the engine would refuse
 tsc -p .                       # type-check; needs .claude-plugin/types/, written when Claude Code loads the plugin
 ```
 
+`tsconfig.json` only extends that generated file. Until Claude Code has loaded the plugin, editors show "Cannot use JSX" (restart the TS server once it exists), and `tsc -p prototypes/<x>` without its own types emits stray `.js` files.
+
 Run all three checks before calling work done. `/hum-demo` inside Claude Code gives a fake Spotify for trying things without an account.
 
 ## Layout
 
 - `hooks/register.tsx`: the only module that receives `$`. Hooks, commands, polling, the Web API client, login and token refresh.
-- `hooks/player.ts`: Now playing, Commands and the Idle hints. Pure.
-- `hooks/spotify.ts`: maps Commands to Web API calls and parses Spotify's replies. Pure.
+- `hooks/player.ts`: Now playing, Commands, the Idle hints, and `stopped()` (no Device: keep the last track paused). Pure.
+- `hooks/spotify.ts`: Web API calls (player, playlists, devices) and parsers for Spotify's replies. Pure.
 - `hooks/demo.ts`: Demo mode, a fake Web API answering in Spotify's JSON. Pure.
 - `hooks/auth.ts`: PKCE, the authorize URL, redirect and token parsing, the node helper script. Pure.
 - `hooks/picker.tsx`: draws the Playlist picker (`/hum-playlist`). Pure.
@@ -39,6 +41,9 @@ Run all three checks before calling work done. `/hum-demo` inside Claude Code gi
 - Without `COLORTERM=truecolor`, Claude Code rounds colors to the 256-color palette; every Look needs a graphite palette for that case.
 - No toasts or popups on clicks. The Bar itself shows the result.
 - Under WSL the browser opens with `wslview`, then PowerShell `Start-Process`. Not `explorer.exe`: it opens File Explorer for long URLs.
+- Claude Code shows a command's reply after the plugin's name, so replies never start with `hum: `. Hints and notes hum draws itself keep it.
+- Handlers interleave across `await` (a second click runs while the first waits on Spotify). Drop stale replies: compare a counter (`latestPoll`, `latestOpen`) or the state the request started from.
+- `Button` children may only be strings and `Text`, so columns are padded by hand with `cells()`/`fit()` (they count emoji and CJK as 2 columns).
 
 ## Testing
 
@@ -46,6 +51,14 @@ Run all three checks before calling work done. `/hum-demo` inside Claude Code gi
 - Stand-ins go through `on('http.fetch' | 'process.run' | 'process.spawn' | 'store.set' | …)` and must return `{ value: … }`. A stand-in can't be replaced inside one test; split the test instead.
 - `$.store.get` isn't available to tests; record writes with a `store.set` stand-in.
 - Expected values come from Spotify's docs or worked examples, never recomputed the way the code does.
+- `ui.find({ text: 'string' })` ignores trailing spaces; check padding with an anchored regex (`/^name {43}$/u`).
+- To test a race, hold a reply in an `async` `http.fetch` stand-in on a promise, leave the first `ui.press` unawaited, then release.
+- Panes: mount with `component: 'Pane'` and its `requestId`; record `ui.open` / `ui.close` with stand-ins.
+
+## Spotify gotchas
+
+- Since March 2026, Development Mode apps use `GET /playlists/{id}/items` (entries' `item`, not `track`), and only playlists the user owns or collaborates on return their items.
+- PC Spotify players may refuse remote (Connect) commands behind a VPN or firewall. Do hand checks with a phone as the Device.
 
 ## Working style
 
