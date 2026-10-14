@@ -120,8 +120,8 @@ export function host(on: any, answer: (argv: string[]) => { exitCode: number; st
 }
 
 /** Waits (a turn of the event loop at a time, up to ~1 s) until `ready()` holds. */
-export async function until(ready: () => boolean) {
-  for (let i = 0; i < 200 && !ready(); i++) await new Promise(r => setTimeout(r, 5))
+export async function until(ready: () => boolean | Promise<boolean>) {
+  for (let i = 0; i < 200 && !(await ready()); i++) await new Promise(r => setTimeout(r, 5))
 }
 
 /** The login link hum opened in the browser (the last argument of the opener). */

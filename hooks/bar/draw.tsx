@@ -73,8 +73,11 @@ function drawIdle(el: El, hint: string) {
 
 type Look = { color?: string; bold?: boolean; underline?: boolean; dimColor?: boolean }
 
-/** A clickable glyph. Hover needs a keyed Box around the Button. */
-function control(el: El, key: string, label: string, look: Look, hover: string | undefined, bg: string | undefined, onPress: () => unknown) {
+/**
+ * A clickable glyph. Hover needs a keyed Box around the Button. A `tip` shows
+ * its name on the row above while hovered, painted over it (nothing moves).
+ */
+function control(el: El, key: string, label: string, look: Look, hover: string | undefined, bg: string | undefined, onPress: () => unknown, tip?: string) {
   const { Box, Button, Text } = el
   return (
     <Box key={`${key}-hover`}>
@@ -83,6 +86,11 @@ function control(el: El, key: string, label: string, look: Look, hover: string |
           {label}
         </Text>
       </Button>
+      {tip !== undefined && (
+        <Box position="absolute" top={-1} display="none" hover={{ display: 'flex' }}>
+          <Text inverse>{` ${tip} `}</Text>
+        </Box>
+      )}
     </Box>
   )
 }
@@ -114,7 +122,7 @@ function icons(el: El, np: Playing, ink: Ink, bg: string | undefined, press: Pre
         </Text>
       )
   return [
-    control(el, 'shuffle', '⇄', np.isShuffle ? on : quiet, ink.hover, bg, () => press({ type: 'shuffle' })),
+    control(el, 'shuffle', '⇄', np.isShuffle ? on : quiet, ink.hover, bg, () => press({ type: 'shuffle' }), 'Shuffle'),
     gap(2),
     volume,
     gap(2),

@@ -360,3 +360,19 @@ test('NO_COLOR in kitty draws no picture either', async ($, on) => {
   expect(await ui.find({ type: 'Image' })).toBeUndefined()
   await ui.unmount()
 })
+
+for (const look of ['glossy', 'minimal', 'glass']) {
+  test(`${look}: hovering shuffle shows its name above it`, async ($, on) => {
+    setup(on, {}, { style: look })
+    await demo($)
+    const ui = await bar($)
+    // The surface shows a hover card itself; the tree carries it hidden, inside shuffle's hover scope.
+    const find = (n: any, key: string): any =>
+      n?.props?.key === key ? n : (n?.children ?? []).map((c: any) => find(c, key)).find((x: any) => x !== undefined)
+    const card = (find(await ui.drawn(), 'shuffle-hover')?.children ?? []).find((c: any) => c?.props?.position === 'absolute')
+    expect(card?.props).toMatchObject({ top: -1, display: 'none' })
+    expect(card?.hover).toEqual({ display: 'flex' }) // the drawn tree keeps hover beside props
+    expect(JSON.stringify(card)).toContain('Shuffle')
+    await ui.unmount()
+  })
+}

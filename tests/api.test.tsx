@@ -3,7 +3,7 @@
 // running the real client against hum's own fake Web API.
 import { expect, test } from 'claude-code/testing'
 
-import { bar, countdownOf, demo, playerBody, setup, spotify, startSession } from './helpers'
+import { bar, countdownOf, demo, playerBody, setup, spotify, startSession, until } from './helpers'
 
 test('before /hum-login, with Demo mode off, the Bar is the Idle hint to log in', async ($, on) => {
   setup(on)
@@ -42,8 +42,8 @@ test('a 204 from Spotify (no Active device) keeps the Controls, with nothing pla
   await ui.unmount()
 })
 
-test('each click sends its Web API request, then reads Now playing again', async ($, on) => {
-  setup(on, {}, LOGGED_IN)
+test('each click sends its Web API request, and Now playing is read again once Spotify has applied it', async ($, on) => {
+  const clock = setup(on, {}, LOGGED_IN)
   const sent = spotify(on, () => ({ status: 200, body: playerBody({ volume: 70 }) }))
   await startSession($, on)
   const ui = await bar($)
@@ -52,18 +52,20 @@ test('each click sends its Web API request, then reads Now playing again', async
     await press()
     return sent.slice(from).map(r => `${r.method} ${r.url.replace(API, '')}`)
   }
-  expect(await after(() => ui.press({ key: 'play' }))).toEqual(['PUT /me/player/pause', 'GET /me/player?additional_types=episode'])
+  // ▶/❚❚, shuffle, repeat, mute and seek show at once, so no read straight after; next and previous read right away.
+  expect(await after(() => ui.press({ key: 'play' }))).toEqual(['PUT /me/player/pause'])
   expect(await after(() => ui.press({ key: 'next' }))).toEqual(['POST /me/player/next', 'GET /me/player?additional_types=episode'])
   expect(await after(() => ui.press({ key: 'prev' }))).toEqual(['POST /me/player/previous', 'GET /me/player?additional_types=episode'])
-  expect(await after(() => ui.press({ key: 'shuffle' }))).toEqual(['PUT /me/player/shuffle?state=true', 'GET /me/player?additional_types=episode'])
-  expect(await after(() => ui.press({ key: 'repeat' }))).toEqual(['PUT /me/player/repeat?state=context', 'GET /me/player?additional_types=episode'])
-  expect(await after(() => ui.press({ key: 'volume' }))).toEqual(['PUT /me/player/volume?volume_percent=0', 'GET /me/player?additional_types=episode'])
+  expect(await after(() => ui.press({ key: 'shuffle' }))).toEqual(['PUT /me/player/shuffle?state=true'])
+  expect(await after(() => ui.press({ key: 'repeat' }))).toEqual(['PUT /me/player/repeat?state=context'])
+  expect(await after(() => ui.press({ key: 'volume' }))).toEqual(['PUT /me/player/volume?volume_percent=0'])
   expect(
     await after(async () => {
       await ui.pointer({ type: 'down', x: 11, y: 0, button: 'left', in: 'seek' })
       await ui.pointer({ type: 'up', x: 11, y: 0, button: 'left', in: 'seek' })
     }),
-  ).toEqual(['PUT /me/player/seek?position_ms=83854', 'GET /me/player?additional_types=episode']) // 11.5 / 24 of 2:55
+  ).toEqual(['PUT /me/player/seek?position_ms=83854']) // 11.5 / 24 of 2:55
+  expect(await after(() => clock.advance(1_500))).toContain('GET /me/player?additional_types=episode')
   await ui.unmount()
 })
 
@@ -287,5 +289,144 @@ test("Demo mode's mute does not leak into real playback after /hum-demo off", as
   ui = await bar($)
   await ui.press({ key: 'volume' }) // unmute real playback
   expect(sent.find(r => r.url.includes('volume_percent'))?.url).toBe(`${API}/me/player/volume?volume_percent=50`)
+  await ui.unmount()
+})
+
+// Clicks show at once (the Bar doesn't wait for Spotify).
+
+test('a click shows its result before Spotify answers', async ($, on) => {
+  setup(on, {}, LOGGED_IN)
+  let release = () => {}
+  const held = new Promise<void>(r => (release = r))
+  on('http.fetch', async (_$: unknown, e: { init?: { method?: string } }) => {
+    if (e.init?.method === 'PUT') await held // Spotify is slow to answer the command
+    return { value: { status: e.init?.method === 'PUT' ? 204 : 200, ok: true, headers: {}, text: e.init?.method === 'PUT' ? '' : JSON.stringify(playerBody()) } }
+  })
+  await startSession($, on)
+  const ui = await bar($)
+  const pause = ui.press({ key: 'play' })
+  await until(async () => (await ui.find({ type: 'Text', text: ' ▶' })) !== undefined)
+  expect(await ui.find({ type: 'Text', text: ' ▶' })).toBeDefined()
+  release()
+  await pause
+  await ui.unmount()
+})
+
+test("a poll right after a click that still has Spotify's old state doesn't undo it; the next read does if Spotify never applied it", async ($, on) => {
+  const clock = setup(on, {}, LOGGED_IN)
+  spotify(on, req => (req.method === 'GET' ? { status: 200, body: playerBody({ isPlaying: true }) } : { status: 204 }))
+  await startSession($, on) // polls at 1 s, 5 s, 9 s
+  await clock.advance(3_500) // 4.5 s
+  const ui = await bar($)
+  await ui.press({ key: 'play' }) // pause, shown at once
+  await clock.advance(500) // the 5 s poll: Spotify still says playing
+  expect(await ui.find({ type: 'Text', text: ' ▶' })).toBeDefined()
+  await clock.advance(1_000) // 6 s: the read 1.5 s after the click, and Spotify still says playing
+  expect(await ui.find({ type: 'Text', text: '❚❚' })).toBeDefined()
+  await ui.unmount()
+})
+
+test('a click Spotify refuses puts the Bar back at once', async ($, on) => {
+  setup(on, {}, LOGGED_IN)
+  spotify(on, req => (req.method === 'GET' ? { status: 200, body: playerBody({ isPlaying: true }) } : { status: 502 }))
+  await startSession($, on)
+  const ui = await bar($)
+  await ui.press({ key: 'play' })
+  expect(await ui.find({ type: 'Text', text: '❚❚' })).toBeDefined()
+  await ui.unmount()
+})
+
+test('a click on the Seek bar moves it at once', async ($, on) => {
+  setup(on, {}, LOGGED_IN)
+  let release = () => {}
+  const held = new Promise<void>(r => (release = r))
+  on('http.fetch', async (_$: unknown, e: { init?: { method?: string } }) => {
+    if (e.init?.method === 'PUT') await held
+    return { value: { status: e.init?.method === 'PUT' ? 204 : 200, ok: true, headers: {}, text: e.init?.method === 'PUT' ? '' : JSON.stringify(playerBody()) } }
+  })
+  await startSession($, on)
+  const ui = await bar($) // 2:55 long, 1:00 in; a 24-cell line
+  await ui.pointer({ type: 'down', x: 11, y: 0, button: 'left', in: 'seek' })
+  const up = ui.pointer({ type: 'up', x: 11, y: 0, button: 'left', in: 'seek' })
+  // 11.5 / 24 of 2:55 is 1:23.85 in, so 1:31 left.
+  await until(async () => (await countdownOf(ui)) === '-1:31')
+  expect(await countdownOf(ui)).toBe('-1:31')
+  release()
+  await up
+  await ui.unmount()
+})
+
+test('next reads Spotify again 0.5 s later, in case the read right after was too soon', async ($, on) => {
+  const clock = setup(on, {}, LOGGED_IN)
+  let skipped = false
+  let readsSince = 0
+  spotify(on, req => {
+    if (req.method === 'POST') {
+      skipped = true
+      return { status: 204 }
+    }
+    // Spotify still reports the old track on the first read after the skip.
+    const isNew = skipped && ++readsSince > 1
+    return { status: 200, body: playerBody({ name: isNew ? 'Flowers' : 'Espresso' }) }
+  })
+  await startSession($, on)
+  const ui = await bar($)
+  await ui.press({ key: 'next' })
+  expect(await ui.find({ type: 'Text', text: /Espresso/ })).toBeDefined()
+  await clock.advance(500) // well before the 4 s poll
+  expect(await ui.find({ type: 'Text', text: /Flowers/ })).toBeDefined()
+  await ui.unmount()
+})
+
+test('mute shows at once, before Spotify answers', async ($, on) => {
+  setup(on, {}, LOGGED_IN)
+  let release = () => {}
+  const held = new Promise<void>(r => (release = r))
+  on('http.fetch', async (_$: unknown, e: { init?: { method?: string } }) => {
+    if (e.init?.method === 'PUT') await held
+    return { value: { status: e.init?.method === 'PUT' ? 204 : 200, ok: true, headers: {}, text: e.init?.method === 'PUT' ? '' : JSON.stringify(playerBody({ volume: 70 })) } }
+  })
+  await startSession($, on)
+  const ui = await bar($)
+  const mute = ui.press({ key: 'volume' })
+  await until(async () => (await ui.find({ type: 'Text', text: '◁× ' })) !== undefined)
+  expect(await ui.find({ type: 'Text', text: '◁× ' })).toBeDefined()
+  release()
+  await mute
+  await ui.unmount()
+})
+
+test('a mute Spotify refuses puts the volume back, and the next click mutes again', async ($, on) => {
+  setup(on, {}, LOGGED_IN)
+  const sent = spotify(on, req => (req.method === 'GET' ? { status: 200, body: playerBody({ volume: 70 }) } : { status: 502 }))
+  await startSession($, on)
+  const ui = await bar($)
+  await ui.press({ key: 'volume' })
+  expect(await ui.find({ type: 'Text', text: '◁))' })).toBeDefined()
+  await ui.press({ key: 'volume' })
+  expect(sent.filter(r => r.url.includes('volume_percent')).map(r => r.url.split('?')[1])).toEqual(['volume_percent=0', 'volume_percent=0'])
+  await ui.unmount()
+})
+
+test('an unmute Spotify refuses keeps the volume to come back to', async ($, on) => {
+  setup(on, {}, LOGGED_IN)
+  let volume = 70
+  const answers = [204, 502, 204] // mute accepted, unmute refused, unmute accepted
+  const sent = spotify(on, req => {
+    if (req.method === 'GET') return { status: 200, body: playerBody({ volume }) }
+    const status = answers.shift() ?? 204
+    if (status === 204) volume = Number(/volume_percent=(\d+)/.exec(req.url)![1])
+    return { status }
+  })
+  await startSession($, on)
+  const ui = await bar($)
+  await ui.press({ key: 'volume' }) // mute: 70 → 0
+  await ui.press({ key: 'volume' }) // unmute: refused, still 0
+  await ui.press({ key: 'volume' }) // unmute again: back to 70
+  expect(sent.filter(r => r.url.includes('volume_percent')).map(r => r.url.split('?')[1])).toEqual([
+    'volume_percent=0',
+    'volume_percent=70',
+    'volume_percent=70',
+  ])
   await ui.unmount()
 })

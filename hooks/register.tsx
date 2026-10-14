@@ -13,7 +13,7 @@ import type { Caps } from './bar/draw'
 import { isStyle, STYLE_NAMES, STYLES } from './bar/look'
 import { demoAnswer, demoPlayer, dropDevice } from './demo'
 import { drawPicker } from './picker'
-import { HINT_LOGIN, HINT_NO_DEVICE, HINT_PASTE, HINT_PREMIUM, idle } from './player'
+import { applied, HINT_LOGIN, HINT_NO_DEVICE, HINT_PASTE, HINT_PREMIUM, idle } from './player'
 import type { Command, Playing } from './player'
 import { appendPage, callFor, GET_DEVICES, GET_ME, GET_PLAYER, itemsCall, muteTarget, parseItems, parseMe, parsePlayer, parsePlaylists, pickDevice, playCall, playlistsCall, transferCall, urlOf } from './spotify'
 import type { ApiCall, Reply } from './spotify'
@@ -53,9 +53,13 @@ let latestOpen = 0
 
 // The login helper running, if any; a new login stops it, so only one holds the port.
 let helper: HookStream<unknown, unknown> | null = null
-// Until then, a poll that sees no Device doesn't undo a wake (Spotify may not list the Device yet).
-let wokeUntil = 0
+// Until then, a poll doesn't undo what a click or a wake just showed: Spotify
+// applies a command a moment after accepting it (and may not list a woken Device yet).
+let heldUntil = 0
 const WAKE_GRACE_MS = 5_000
+const CLICK_HOLD_MS = 1_500
+/** Next and previous: when to read again, in case the read right after the click came too soon. */
+const SKIP_RECHECK_MS = 500
 
 // The refresh in flight, if any: concurrent requests share it rather than each
 // spending the same refresh token (which Spotify may rotate). Module variable.
@@ -193,7 +197,7 @@ async function poll($: EngineInterface) {
   const at = await $.clock.now()
   // An error (429, 401, 5xx...) keeps the Now playing hum had.
   const np = parsePlayer(reply.status, reply.text, at, await read($, nowPlaying))
-  if (np === null || (np.kind === 'playing' && !np.hasDevice && at < wokeUntil)) return
+  if (np === null || at < heldUntil) return
   await update($, nowPlaying, () => np)
 }
 
@@ -214,7 +218,7 @@ async function wake($: EngineInterface, np: Playing) {
   const moved = deviceId === null ? null : await api($, transferCall(deviceId))
   if (deviceId === null || moved === null || moved.status >= 300) return showNote($, NOTE_OPEN_SPOTIFY)
   const at = await $.clock.now()
-  wokeUntil = at + WAKE_GRACE_MS
+  heldUntil = at + WAKE_GRACE_MS
   await update($, barNote, () => ({ text: '', until: 0 }))
   // Show it playing now: the poll right after a transfer may not see the Device yet.
   await update($, nowPlaying, cur => (cur.kind === 'playing' ? { ...cur, isPlaying: true, at, hasDevice: true, deviceId } : cur))
@@ -230,20 +234,31 @@ async function send($: EngineInterface, cmd: Command) {
     else await showNote($, NOTE_PRESS_PLAY)
     return
   }
-  if (cmd.type === 'mute') {
-    if (!np.canSetVolume) return
-    const restore = await read($, mutedFrom)
-    const reply = await api($, callFor(cmd, np, restore))
-    if (reply !== null && reply.status < 300) {
-      await update($, mutedFrom, () => (np.volume === 0 ? null : np.volume))
-      // Show the new volume now, so a second quick click starts from it.
-      const volume = muteTarget(np, restore)
-      await update($, nowPlaying, cur => (cur.kind === 'playing' ? { ...cur, volume } : cur))
-    }
-  } else {
+  if (cmd.type === 'mute' && !np.canSetVolume) return
+  const now = await $.clock.now()
+  const restore = await read($, mutedFrom)
+  const isMute = cmd.type === 'mute'
+  const shown = isMute ? { ...np, volume: muteTarget(np, restore) } : applied(np, cmd, now)
+  if (shown === np) {
+    // Next or previous: Spotify knows the new track; read it now, and again in case that was too soon.
     await api($, callFor(cmd, np, null))
+    await poll($)
+    $.clock.after(SKIP_RECHECK_MS, () => void poll($))
+    return
   }
-  await poll($)
+  // Show it now, and read Spotify once it has applied the command.
+  heldUntil = now + CLICK_HOLD_MS
+  await update($, nowPlaying, () => shown)
+  // Muting remembers the volume to unmute to; unmuting forgets it.
+  if (isMute) await update($, mutedFrom, () => (np.volume === 0 ? null : np.volume))
+  const reply = await api($, callFor(cmd, np, restore))
+  if (reply === null || reply.status >= 300) {
+    // Refused: put back what Spotify has.
+    heldUntil = 0
+    await update($, nowPlaying, () => np)
+    if (isMute) await update($, mutedFrom, () => restore)
+  }
+  $.clock.after(CLICK_HOLD_MS, () => void poll($))
 }
 
 async function runDemo($: EngineInterface, args: string) {

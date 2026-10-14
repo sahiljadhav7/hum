@@ -15,7 +15,7 @@ This document replaces the tmux, standalone, and title/artist plan in `idea.md`.
 **Decided 2026-10-13: hum ships all three looks**, **Glossy** (the default), **Minimal** and **Glass**. Users switch with `/hum-style`, and the choice is remembered across sessions. Each is described in its own section below. What they share:
 
 - **Title and artist are shown.** This reverses the earlier "no title or artist" decision, after the user supplied a reference screenshot.
-- **Controls** `◀◀ ❚❚ ▶▶` (` ▶` when paused), plus `⇄` shuffle, `◁))` volume and `↻` repeat on the right. Plain click.
+- **Controls** `◀◀ ❚❚ ▶▶` (` ▶` when paused), plus `⇄` shuffle, `◁))` volume and `↻` repeat on the right. Plain click. Hovering `⇄` shows ` Shuffle ` (inverse) on the row above it, painted over that row so nothing moves.
 - **Seek bar**: a thin line you can click to seek. Glossy and Minimal also show a fixed 7-cell countdown (`-1:14`).
 - **Volume** is an icon, not a slider: it shows the level (`◁× ` / `◁) ` / `◁))`) and a click mutes or unmutes.
 - **No Cover** (album image), in any terminal: dropped 2026-10-13. See [The Cover: dropped](#the-cover-dropped-2026-10-13).
@@ -32,7 +32,7 @@ This document replaces the tmux, standalone, and title/artist plan in `idea.md`.
 
 - **Web API only**: hum controls whichever Device is active, including a phone or a speaker.
 - Each user creates their own **Developer app** with the redirect URI `http://127.0.0.1:8898/callback`. Premium is required, because the app owner must have it, so free accounts can't use hum.
-- hum polls Now playing every 4 s and polls again right after every action. Between polls the Seek bar moves on locally: each redraw places it from the time of the last poll, and between redraws it ticks forward once a second by itself.
+- hum polls Now playing every 4 s. **Clicks show at once**: ▶/❚❚, shuffle, repeat, mute/unmute and a Seek bar click change the Bar before Spotify answers, and for 1.5 s a poll doesn't undo them (Spotify applies a command a moment after accepting it); then hum reads Spotify again, which puts back anything it didn't apply. A refused click is put back at once. Next and previous wait for Spotify: hum reads right after, and again 0.5 s later. Between polls the Seek bar moves on locally: each redraw places it from the time of the last poll, and between redraws it ticks forward once a second by itself.
 - Podcasts: the poll asks for episodes too (`additional_types=episode`) and shows the episode and its show. During an ad the Bar says `hum: ad playing`; with a Device but nothing loaded it keeps its Controls, as with no Device.
 - An error reply (5xx, 403...) keeps the last Now playing rather than claiming there's no Device.
 - After a `429`, hum sends nothing until `Retry-After` has passed. A `401` shows `hum: run /hum-login`, and the refused token isn't sent again (issue 03 refreshes it there first).

@@ -3,7 +3,7 @@
 // requests (through $.http.fetch, or Demo mode).
 // Reference: https://developer.spotify.com/documentation/web-api (Player, Playlists).
 import type { NowPlaying, Page, PlaylistRow, TrackRow } from '../types'
-import { DEFAULT_VOLUME, HINT_AD, idle, nextRepeat, stopped } from './player'
+import { DEFAULT_VOLUME, HINT_AD, idle, nextRepeat, seekMs, stopped } from './player'
 import type { Command, Playing } from './player'
 
 export const API = 'https://api.spotify.com/v1'
@@ -36,10 +36,8 @@ export function callFor(cmd: Command, np: Playing, mutedFrom: number | null): Ap
       return { method: 'POST', path: '/me/player/next' }
     case 'previous':
       return { method: 'POST', path: '/me/player/previous' }
-    case 'seek': {
-      const ms = Math.round(Math.max(0, Math.min(1, cmd.fraction)) * np.track.durationMs)
-      return { method: 'PUT', path: '/me/player/seek', query: { position_ms: String(ms) } }
-    }
+    case 'seek':
+      return { method: 'PUT', path: '/me/player/seek', query: { position_ms: String(seekMs(np, cmd.fraction)) } }
     case 'mute': {
       const to = muteTarget(np, mutedFrom)
       return { method: 'PUT', path: '/me/player/volume', query: { volume_percent: String(Math.round(to * 100)) } }

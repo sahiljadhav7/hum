@@ -19,6 +19,29 @@ export const positionAt = (np: Playing, now: number) =>
 
 export const nextRepeat: Record<Repeat, Repeat> = { off: 'context', context: 'track', track: 'off' }
 
+/** Where a click at `fraction` (0 to 1) of the Seek bar lands, in ms. */
+export const seekMs = (np: Playing, fraction: number) => Math.round(Math.max(0, Math.min(1, fraction)) * np.track.durationMs)
+
+/**
+ * What a click shows at once, before Spotify answers: play/pause, shuffle,
+ * repeat and seek. Next and previous return `np` itself (the next track isn't
+ * known yet), and so does mute (it shows once Spotify accepts it).
+ */
+export function applied(np: Playing, cmd: Command, now: number): Playing {
+  switch (cmd.type) {
+    case 'toggle':
+      return { ...np, isPlaying: !np.isPlaying, positionMs: positionAt(np, now), at: now }
+    case 'shuffle':
+      return { ...np, isShuffle: !np.isShuffle }
+    case 'repeat':
+      return { ...np, repeat: nextRepeat[np.repeat] }
+    case 'seek':
+      return { ...np, positionMs: seekMs(np, cmd.fraction), at: now }
+    default:
+      return np
+  }
+}
+
 export const idle = (hint: string): NowPlaying => ({ kind: 'idle', hint })
 
 export const HINT_LOGIN = 'hum: run /hum-login'
