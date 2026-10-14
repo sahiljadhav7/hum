@@ -115,13 +115,13 @@ test('Glossy with truecolor is the warm two-tone capsule, square ends in Windows
   await ui.unmount()
 })
 
-test('in kitty the capsule ends and the Cover are pictures; not through tmux', async ($, on) => {
+test('in kitty the capsule ends are pictures, and there is no Cover; not through tmux', async ($, on) => {
   setup(on, { TERM: 'xterm-kitty', KITTY_WINDOW_ID: '1', COLORTERM: 'truecolor' })
   await demo($)
   const ui = await bar($)
   expect((await ui.find({ key: 'cap-l' }))?.type).toBe('Image')
   expect((await ui.find({ key: 'cap-r' }))?.type).toBe('Image')
-  expect((await ui.find({ key: 'cover' }))?.type).toBe('Image')
+  expect(await ui.findAll({ type: 'Image' })).toHaveLength(2)
   await ui.unmount()
 })
 
@@ -248,7 +248,6 @@ test('Glass in Windows Terminal: flat capsule, an inset card, no pictures or sta
   expect(await ui.find({ key: 'card' })).toBeDefined()
   expect(await ui.find({ type: 'Text', text: /Miley Cyrus, Sia/ })).toBeDefined()
   expect(await ui.find({ type: 'Image' })).toBeUndefined()
-  expect((await ui.find({ key: 'cover' }))?.type).toBe('Box') // a solid swatch
   expect(await ui.find({ type: 'Text', text: /[▗▐▝▖▌▘]/ })).toBeUndefined()
   // Without truecolor: graphite, not browns that round to olive and pink.
   const tree = JSON.stringify(await ui.drawn())
@@ -257,12 +256,12 @@ test('Glass in Windows Terminal: flat capsule, an inset card, no pictures or sta
   await ui.unmount()
 })
 
-test('Glass in kitty: smooth picture ends and a picture Cover', async ($, on) => {
+test('Glass in kitty: smooth picture ends, and no Cover', async ($, on) => {
   setup(on, { TERM: 'xterm-kitty', KITTY_WINDOW_ID: '1', COLORTERM: 'truecolor' }, { style: 'glass' })
   await demo($)
   const ui = await bar($)
   expect((await ui.find({ key: 'cap-l' }))?.type).toBe('Image')
-  expect((await ui.find({ key: 'cover' }))?.type).toBe('Image')
+  expect(await ui.findAll({ type: 'Image' })).toHaveLength(2)
   await ui.unmount()
 })
 
@@ -303,15 +302,44 @@ test('Glossy: the icons drop before the Seek bar shrinks', async ($, on) => {
 
 test('Glass: the icons drop before the title area shrinks', async ($, on) => {
   setup(on, {}, { style: 'glass' })
-  // Glass in Windows Terminal needs 72 columns for icons plus a full 30-cell title area.
+  // Glass in Windows Terminal needs 64 columns for icons plus a full 30-cell title area:
+  // 2 margin + 2×2 padding + controls 10, gaps 3+3, card (1 + 30 + 1), icons 10.
   await demo($)
-  let ui = await bar($, 72)
+  let ui = await bar($, 64)
   expect(await ui.find({ key: 'shuffle' })).toBeDefined()
-  expect(await lineCells(ui)).toBe(35) // the card's line spans the Cover and title: 5 + 30
+  expect(await lineCells(ui)).toBe(30) // the card's line spans the title area
   await ui.unmount()
-  ui = await bar($, 71)
+  ui = await bar($, 63)
   expect(await ui.find({ key: 'shuffle' })).toBeUndefined()
-  expect(await lineCells(ui)).toBe(35)
+  expect(await lineCells(ui)).toBe(30)
+  await ui.unmount()
+})
+
+test('Glass in kitty: the picture ends take 3 cells each, so the icons need 70 columns', async ($, on) => {
+  setup(on, { TERM: 'xterm-kitty', KITTY_WINDOW_ID: '1', COLORTERM: 'truecolor' }, { style: 'glass' })
+  // 64 as in Windows Terminal, plus two 3-cell ends.
+  await demo($)
+  let ui = await bar($, 70)
+  expect(await ui.find({ key: 'shuffle' })).toBeDefined()
+  expect(await lineCells(ui)).toBe(30)
+  await ui.unmount()
+  ui = await bar($, 69)
+  expect(await ui.find({ key: 'shuffle' })).toBeUndefined()
+  expect(await lineCells(ui)).toBe(30)
+  await ui.unmount()
+})
+
+test('Glossy in kitty: the picture ends take 2 cells each, so the icons need 67 columns', async ($, on) => {
+  setup(on, { TERM: 'xterm-kitty', KITTY_WINDOW_ID: '1', COLORTERM: 'truecolor' })
+  // 63 as in Windows Terminal, plus two 2-cell ends.
+  await demo($)
+  let ui = await bar($, 67)
+  expect(await ui.find({ key: 'shuffle' })).toBeDefined()
+  expect(await lineCells(ui)).toBe(24)
+  await ui.unmount()
+  ui = await bar($, 66)
+  expect(await ui.find({ key: 'shuffle' })).toBeUndefined()
+  expect(await lineCells(ui)).toBe(24)
   await ui.unmount()
 })
 

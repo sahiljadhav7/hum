@@ -5,9 +5,9 @@ import type { Style } from '../../types'
 import { positionAt } from '../player'
 import type { NowPlaying } from '../../types'
 import type { Command, Playing } from '../player'
-import { cells, fit, GLASS, GLOSSY, MINIMAL_INK, toHex, mix, volumeGlyph } from './look'
+import { cells, fit, GLASS, GLOSSY, MINIMAL_INK, volumeGlyph } from './look'
 import type { Ink } from './look'
-import { capPixels, CELL_H, CELL_W, coverPixels } from './pixels'
+import { capPixels, CELL_H, CELL_W } from './pixels'
 import type { SeekProps } from './seek'
 
 /** What the terminal can do, read by register.tsx from the environment. */
@@ -112,7 +112,7 @@ function icons(el: El, np: Playing, ink: Ink, bg: string | undefined, press: Pre
 
 // Glossy, Minimal and the NO_COLOR fallback share one two-row layout:
 //                         Muddy Feet (feat Sia) · Miley Cyrus, Sia
-//   ◀◀  ❚❚  ▶▶   ━━━━━━━━╸────────   -1:14   ⇄  ◁))  ↻   [cover]
+//   ◀◀  ❚❚  ▶▶   ━━━━━━━━╸────────   -1:14   ⇄  ◁))  ↻
 function drawLinear(el: El, np: Playing, input: BarInput, press: Press, mode: 'glossy' | 'minimal' | 'plain') {
   const { Box, Text, Client, Image } = el
   const { caps } = input
@@ -122,22 +122,21 @@ function drawLinear(el: El, np: Playing, input: BarInput, press: Press, mode: 'g
   const ink: Ink = isGlossy ? palette.ink : mode === 'minimal' ? MINIMAL_INK : {}
 
   // Widths are measured, never thresholds: controls, gap, Seek bar + time, gap,
-  // icons, and a 2+2 Cover where images work. Glossy adds 2 cells of padding
-  // inside each end, and a 2-cell image end in kitty.
+  // icons. Glossy adds 2 cells of padding inside each end, and a 2-cell image
+  // end in kitty.
   const pad = isGlossy ? 2 : 0
   const cap = isGlossy && caps.images ? 2 : 0
-  const cover = caps.images && mode !== 'plain' ? 4 : 0 // NO_COLOR: no colored picture either
   const room = input.columns - 2 - 2 * (pad + cap)
   // The icons drop first, while the Seek bar can still be full length; only then does it shrink.
-  const hasIcons = room - (CONTROLS_CELLS + 3 + TIME_CELLS + 3 + ICONS_CELLS + cover) >= SEEK_MAX
-  const fixed = CONTROLS_CELLS + 3 + TIME_CELLS + (hasIcons ? 3 + ICONS_CELLS : 0) + cover
+  const hasIcons = room - (CONTROLS_CELLS + 3 + TIME_CELLS + 3 + ICONS_CELLS) >= SEEK_MAX
+  const fixed = CONTROLS_CELLS + 3 + TIME_CELLS + (hasIcons ? 3 + ICONS_CELLS : 0)
   const line = Math.max(SEEK_MIN, Math.min(SEEK_MAX, room - fixed))
   const width = fixed + line
 
   const rest = ` · ${np.track.artist}`
-  const title = fit(np.track.title, Math.max(4, width - cover - cells(rest)))
-  const shownRest = fit(rest, Math.max(0, width - cover - cells(title)))
-  const lead = Math.max(0, width - cover - cells(title) - cells(shownRest))
+  const title = fit(np.track.title, Math.max(4, width - cells(rest)))
+  const shownRest = fit(rest, Math.max(0, width - cells(title)))
+  const lead = Math.max(0, width - cells(title) - cells(shownRest))
   const space = (n: number, row: 0 | 1) => <Text backgroundColor={bg[row]}>{' '.repeat(Math.max(0, n))}</Text>
 
   const seek: SeekProps = plain({
@@ -177,7 +176,6 @@ function drawLinear(el: El, np: Playing, input: BarInput, press: Press, mode: 'g
           <Text color={ink.artist} dimColor={ink.artist === undefined} backgroundColor={bg[0]}>
             {shownRest}
           </Text>
-          {cover > 0 && space(cover, 0)}
         </Box>
         <Box flexDirection="row">
           {controls(el, np, ink, bg[1], press)}
@@ -185,10 +183,6 @@ function drawLinear(el: El, np: Playing, input: BarInput, press: Press, mode: 'g
           <Client key="seek" module="./seek.tsx" props={seek} />
           {hasIcons && space(3, 1)}
           {hasIcons && icons(el, np, ink, bg[1], press)}
-          {cover > 0 && space(2, 1)}
-          {cover > 0 && (
-            <Image key="cover" source={{ rgba: coverPixels(np.track.cover, 2, 1, bg[1] ?? null), width: 2 * CELL_W, height: CELL_H }} columns={2} rows={1} alt=" " />
-          )}
         </Box>
       </Box>
       {padding('pad-r')}
@@ -198,7 +192,7 @@ function drawLinear(el: El, np: Playing, input: BarInput, press: Press, mode: 'g
 }
 
 // Glass: three rows like the user's screenshot. Controls left, an inset card
-// with the Cover, title, artist and a thin Seek bar along its bottom,
+// with the title, artist and a thin Seek bar along its bottom,
 // icons right. Flat and square without images; smooth ends and a gradient
 // where the ends are pictures.
 function drawGlass(el: El, np: Playing, input: BarInput, press: Press) {
@@ -209,11 +203,11 @@ function drawGlass(el: El, np: Playing, input: BarInput, press: Press) {
   const cardBg = caps.images ? palette.card : [palette.flatCard, palette.flatCard, palette.flatCard]
   const endCells = caps.images ? 3 : 0 // a smooth half disc needs ~3 cells across
 
-  // Widths: ends, padding 2+2, controls, gaps 3+3, card (1 + Cover 4 + 1 + titleCells + 1), icons.
-  const base = 2 * endCells + 4 + CONTROLS_CELLS + 6 + 7
+  // Widths: ends, padding 2+2, controls, gaps 3+3, card (1 + titleCells + 1), icons.
+  const base = 2 * endCells + 4 + CONTROLS_CELLS + 6 + 2
   // The icons drop first, while the title area can still be full width; only then does it shrink.
-  const hasIcons = input.columns - 2 - base - (ICONS_CELLS + 3) >= TITLE_MAX
-  const titleCells = Math.max(TITLE_MIN, Math.min(TITLE_MAX, input.columns - 2 - base - (hasIcons ? ICONS_CELLS + 3 : 0)))
+  const hasIcons = input.columns - 2 - base - ICONS_CELLS >= TITLE_MAX
+  const titleCells = Math.max(TITLE_MIN, Math.min(TITLE_MAX, input.columns - 2 - base - (hasIcons ? ICONS_CELLS : 0)))
 
   const blank = (key: string, width: number) => (
     <Box key={key} flexDirection="column">
@@ -230,9 +224,8 @@ function drawGlass(el: El, np: Playing, input: BarInput, press: Press) {
     </Box>
   )
   const pad = (s: string) => s + ' '.repeat(Math.max(0, titleCells - cells(s)))
-  const swatch = palette.swatch ?? toHex(mix(np.track.cover[0], np.track.cover[1], 0.4))
   const seek: SeekProps = plain({
-    cells: 5 + titleCells,
+    cells: titleCells,
     positionMs: positionAt(np, input.now),
     durationMs: np.track.durationMs,
     isPlaying: np.isPlaying,
@@ -255,28 +248,12 @@ function drawGlass(el: El, np: Playing, input: BarInput, press: Press) {
         {middle('controls', CONTROLS_CELLS, controls(el, np, palette.ink, rowBg[1], press))}
         {blank('gap-1', 3)}
         <Box key="card" flexDirection="column">
-          <Box flexDirection="row">
-            <Box flexDirection="column">
-              <Text backgroundColor={cardBg[0]}> </Text>
-              <Text backgroundColor={cardBg[1]}> </Text>
-            </Box>
-            {caps.images ? (
-              <Image key="cover" source={{ rgba: coverPixels(np.track.cover, 4, 2, cardBg[0]!), width: 4 * CELL_W, height: 2 * CELL_H }} columns={4} rows={2} alt=" " />
-            ) : (
-              <Box key="cover" flexDirection="column">
-                <Text backgroundColor={swatch}>{'    '}</Text>
-                <Text backgroundColor={swatch}>{'    '}</Text>
-              </Box>
-            )}
-            <Box flexDirection="column">
-              <Text backgroundColor={cardBg[0]} color={palette.ink.title} bold>
-                {' ' + pad(fit(np.track.title, titleCells)) + ' '}
-              </Text>
-              <Text backgroundColor={cardBg[1]} color={palette.ink.artist}>
-                {' ' + pad(fit(np.track.artist, titleCells)) + ' '}
-              </Text>
-            </Box>
-          </Box>
+          <Text backgroundColor={cardBg[0]} color={palette.ink.title} bold>
+            {' ' + pad(fit(np.track.title, titleCells)) + ' '}
+          </Text>
+          <Text backgroundColor={cardBg[1]} color={palette.ink.artist}>
+            {' ' + pad(fit(np.track.artist, titleCells)) + ' '}
+          </Text>
           <Box flexDirection="row">
             <Text backgroundColor={cardBg[2]}> </Text>
             <Client key="seek" module="./seek.tsx" props={seek} />

@@ -1,5 +1,7 @@
 # Fetch Cover bytes with curl, and decode them in hum with a vendored jpeg-js
 
+**Superseded by [ADR 0004](0004-drop-the-cover.md)** (2026-10-13): hum dropped the Cover, so it fetches no images.
+
 hum downloads the Cover's JPEG by running `curl -sfL -o <file> <url>` with `$.process.run`, then reads the file back with `$.fs.read(file, { as: 'bytes' })`. It decodes the JPEG itself with jpeg-js's decoder, vendored into hum. `$.http.fetch` can't do this job. It returns the body as UTF-8 text, so a binary body is destroyed: in issue 04 a 2822-byte cover came back as 2663 characters, 1041 of them U+FFFD. curl's stdout through `$.process.run` is mangled the same way, so the bytes have to go through a file.
 
 ## Considered Options

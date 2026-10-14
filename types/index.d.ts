@@ -11,10 +11,6 @@ export type Track = {
   /** The track's artists, joined with ", ". */
   artist: string
   durationMs: number
-  /** Placeholder Cover colors (0xRRGGBB, a gradient) until the real Cover (issue 05). */
-  cover: [number, number]
-  /** The album image Spotify gives, when there is one. */
-  coverUrl?: string
 }
 
 /** Now playing: what the Bar draws, as of the last poll. */

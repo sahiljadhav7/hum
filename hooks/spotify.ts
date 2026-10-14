@@ -62,21 +62,12 @@ type PlayerJson = {
     duration_ms?: number
     /** A track's. */
     artists?: { name?: string }[]
-    album?: { id?: string; images?: { url?: string }[] }
     /** An episode's. */
     show?: { name?: string }
-    images?: { url?: string }[]
   } | null
 }
 
-/** Two placeholder Cover colors from a string, until the real Cover (issue 05). */
 export const parseRepeat = (state: string | undefined) => (state === 'context' || state === 'track' ? state : 'off')
-
-const placeholderCover = (seed: string): [number, number] => {
-  let h = 2166136261
-  for (const ch of seed) h = Math.imul(h ^ ch.charCodeAt(0), 16777619) >>> 0
-  return [h & 0xffffff, (h >>> 8) & 0xffffff]
-}
 
 /**
  * Now playing from a successful `GET /v1/me/player` answer (200 or 204); `at`
@@ -97,7 +88,6 @@ export function parsePlayer(status: number, text: string, at: number): NowPlayin
   const item = json.item
   if (!item) return idle(HINT_NOTHING)
   const isEpisode = item.type === 'episode'
-  const coverUrl = (isEpisode ? item.images : item.album?.images)?.[0]?.url
   return {
     kind: 'playing',
     track: {
@@ -106,8 +96,6 @@ export function parsePlayer(status: number, text: string, at: number): NowPlayin
         ? (item.show?.name ?? '')
         : (item.artists ?? []).map(a => a.name ?? '').filter(n => n !== '').join(', '),
       durationMs: item.duration_ms ?? 0,
-      cover: placeholderCover(item.album?.id ?? item.id ?? item.name ?? ''),
-      ...(coverUrl === undefined ? {} : { coverUrl }),
     },
     isPlaying: json.is_playing === true,
     positionMs: json.progress_ms ?? 0,

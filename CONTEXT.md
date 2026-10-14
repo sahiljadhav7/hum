@@ -5,7 +5,7 @@ A Claude Code plugin that shows what Spotify is playing and offers clickable pla
 ## Language
 
 **Bar**:
-The strip under the prompt, two or three rows depending on the Look, showing the track's title and artist with the Controls, Seek bar, Volume icon and Cover.
+The strip under the prompt, two or three rows depending on the Look, showing the track's title and artist with the Controls, Seek bar and Volume icon.
 _Avoid_: Player, widget, status line, pane
 
 **Look**:
@@ -39,7 +39,7 @@ The thin line showing how far into the track playback is; clicking it jumps play
 _Avoid_: Scrubber, progress bar, progress line
 
 **Cover**:
-The album artwork of the current track: a real picture where the terminal can draw one, and 2 cells of `▀` half-blocks from its pixels elsewhere.
+The album artwork of the current track. hum doesn't show it (dropped 2026-10-13, ADR 0004); the term stays for the issues and ADRs that discuss it.
 _Avoid_: Album art, thumbnail, artwork
 
 **Volume icon**:

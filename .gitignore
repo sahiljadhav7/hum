@@ -11,3 +11,6 @@ skills-lock.json
 **/.claude-plugin/types/
 
 node_modules/
+
+# Session handoff notes (local only)
+HANDOFF.md

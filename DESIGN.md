@@ -1,6 +1,6 @@
 # hum: design
 
-hum is a Claude Code plugin. It draws a Spotify Bar under Claude Code's prompt, with the track's title and artist, clickable playback Controls, a Seek bar, a Volume icon and the Cover. Terms are defined in [CONTEXT.md](CONTEXT.md). The key decisions are recorded in [ADR 0001](docs/adr/0001-spotify-web-api-only.md) (Web API only) and [ADR 0002](docs/adr/0002-claude-code-plugin-not-standalone.md) (Claude Code plugin, not a standalone app).
+hum is a Claude Code plugin. It draws a Spotify Bar under Claude Code's prompt, with the track's title and artist, clickable playback Controls, a Seek bar and a Volume icon. Terms are defined in [CONTEXT.md](CONTEXT.md). The key decisions are recorded in [ADR 0001](docs/adr/0001-spotify-web-api-only.md) (Web API only) and [ADR 0002](docs/adr/0002-claude-code-plugin-not-standalone.md) (Claude Code plugin, not a standalone app). [ADR 0004](docs/adr/0004-drop-the-cover.md) drops the Cover.
 
 This document replaces the tmux, standalone, and title/artist plan in `idea.md`.
 
@@ -18,7 +18,7 @@ This document replaces the tmux, standalone, and title/artist plan in `idea.md`.
 - **Controls** `◀◀ ❚❚ ▶▶` (` ▶` when paused), plus `⇄` shuffle, `◁))` volume and `↻` repeat on the right. Plain click.
 - **Seek bar**: a thin line you can click to seek. Glossy and Minimal also show a fixed 7-cell countdown (`-1:14`).
 - **Volume** is an icon, not a slider: it shows the level (`◁× ` / `◁) ` / `◁))`) and a click mutes or unmutes.
-- **Cover**: a real image where the terminal can draw one (kitty, Ghostty). Everywhere else, in every Look, it is 2 cells wide and 1 row tall, drawn as `▀` half-blocks from the cover's own pixels (decided 2026-10-13, issue 04). See [Cover pixels](#cover-pixels-answered-2026-10-13).
+- **No Cover** (album image), in any terminal: dropped 2026-10-13. See [The Cover: dropped](#the-cover-dropped-2026-10-13).
 - **Right-aligned.** As the width shrinks, the right-hand icons drop first, then the Seek bar shrinks.
 - **Height**: two rows (Glossy, Minimal) or three (Glass). The row under the prompt shows them all (confirmed by a user screenshot).
 - **`NO_COLOR`**: Minimal with no colors at all, using only bold, underline and inverse on hover.
@@ -64,9 +64,8 @@ This is the Minimal layout (below) on a warm frosted capsule, after the user ask
 - **Ends**: square in Windows Terminal (no stair-stepped `▗▐▝`). In kitty and Ghostty they are smooth anti-aliased half-disc images, 2 cells wide.
 - **Text on the capsule** (hex, because the capsule paints its own background, so it looks the same in light and dark themes): title `#F6F1EC` bold, `· artist` `#CBBFB4`, `◀◀ ❚❚ ▶▶` `#F1EBE5`, `⇄ ◁)) ↻` `#C4B8AD` turning bold white on hover, and on = bold white underlined.
 - **Progress**: played `━`/`╸` `#F6F1EC` on a `#4B3F35` `─` track, with the countdown in `#CBBFB4`, all on the controls-row color.
-- **Cover**: a real image in kitty and Ghostty, with corners in the capsule color. Elsewhere, the 2×1 half-block Cover.
 - `/hum-proto style` → Minimal gives the same layout with no background.
-- **Color depth**: the browns need truecolor. Without `COLORTERM=truecolor` (the default in a WSL shell), Claude Code rounds colors into the xterm 256-color cube. The user's screenshot showed `#7A695B` → grey `#878787` and `#68584B` → olive `#87875F`. hum then switches to a graphite gloss built only from exact grayscale-ramp entries (`#585858` / `#444444`, text `#EEEEEE` / `#BCBCBC`), so nothing shifts. Glass does the same (user, 2026-10-13: "I don't like the pink and green one"): its browns rounded to olive green and its beige artist text to pink. Without truecolor it uses graphite too (`#4E4E4E` capsule, `#3A3A3A` card). The Cover keeps its own colors, rounded to 256; the user found that fine.
+- **Color depth**: the browns need truecolor. Without `COLORTERM=truecolor` (the default in a WSL shell), Claude Code rounds colors into the xterm 256-color cube. The user's screenshot showed `#7A695B` → grey `#878787` and `#68584B` → olive `#87875F`. hum then switches to a graphite gloss built only from exact grayscale-ramp entries (`#585858` / `#444444`, text `#EEEEEE` / `#BCBCBC`), so nothing shifts. Glass does the same (user, 2026-10-13: "I don't like the pink and green one"): its browns rounded to olive green and its beige artist text to pink. Without truecolor it uses graphite too (`#4E4E4E` capsule, `#3A3A3A` card).
 
 ## Look: Minimal
 
@@ -74,14 +73,13 @@ The user asked for "smooth and minimalist" after Glass. Filled backgrounds are w
 
 ```
                           Muddy Feet (feat Sia) · Miley Cyrus, Sia
-  ◀◀  ❚❚  ▶▶   ━━━━━━━━╸────────   -1:14   ⇄  ◁))  ↻    ▀▀ (Cover)
+  ◀◀  ❚❚  ▶▶   ━━━━━━━━╸────────   -1:14   ⇄  ◁))  ↻
 ```
 
 - **Two rows, right-aligned**: `title · artist` above the controls row. The title is bold `text`, `· artist` is `inactive`, and it truncates with `…`.
 - **No backgrounds anywhere**: text on the terminal's own background. Colors are Claude Code theme keys (`text`, `inactive`, `subtle`), so it works in light and dark themes.
 - **Controls** `◀◀ ❚❚ ▶▶` in `text`. **Icons** `⇄ ◁)) ↻` in `inactive`, turning bold `text` on hover. Shuffle and repeat on: bold and underlined `text`. The speaker shows the level (`◁× ` / `◁) ` / `◁))`); a click mutes or unmutes.
 - **Smooth Seek bar**: `━` played in `text`, then a half-cell `╸`, on a light `─` track in `subtle`. It moves in half-cell steps with no knob, and clicking it seeks. The countdown is a fixed 7 cells in `inactive`.
-- **Cover**: at the right end, 2×1 cells. In kitty or Ghostty it is a rounded image with clear corners. Elsewhere, Windows Terminal included, it is `▀` half-blocks. This reverses the earlier decision to leave it out there: the user saw the real cover's half-blocks in the prototype for issue 04 and chose them.
 - **Narrow**: the right-hand icons drop first, then the Seek bar shrinks (8 cells minimum).
 
 ## Look: Glass (from the user's screenshot)
@@ -89,17 +87,16 @@ The user asked for "smooth and minimalist" after Glass. Filled backgrounds are w
 The user supplied a screenshot of a glossy capsule player and asked for the Bar to look exactly like it. Glass is now the prototype's default look. **If accepted, it reverses two decisions**: the Bar becomes **3 rows** (not 1), and it **shows the title and artist**.
 
 - **Capsule**: three rows, right-aligned.
-  - **Windows Terminal, tmux, and anywhere without images**: flat and square. One brown `#6A594C`, no end caps, and no banded gradient. The user rejected the stair-stepped `▗▐▝` caps and the mosaic Cover as pixelated; crisp beats fake-smooth. (That mosaic was a placeholder. The 2×1 half-block Cover from the real pixels was chosen later, in issue 04.)
+  - **Windows Terminal, tmux, and anywhere without images**: flat and square. One brown `#6A594C`, no end caps, and no banded gradient. The user rejected the stair-stepped `▗▐▝` caps and a mosaic Cover as pixelated; crisp beats fake-smooth.
   - **kitty and Ghostty**: a light-to-dark gradient (`#7D6C5D` → `#6A594C` → `#594A3E`) stands in for the frosted gloss, with anti-aliased half-disc image caps.
 - kitty is **optional**. hum never requires it.
 - **Left**: `◀◀ ❚❚ ▶▶` (` ▶` when paused) in `#E9E2DA`, white and bold on hover. These replace `⏪⏩`, which render as emoji.
-- **Card** (inset, darker: flat `#4A3D33` without images, `#4F4237`→`#463A30` in kitty): the Cover (a rounded 4×2-cell picture in kitty; without images, the 2×1 half-block Cover in the card's top row, the row under it blank card, so the Cover column is 2 cells wide), the title (bold `#F5F0EB`) and the artist (`#B7ABA0`), truncated with `…`. Along its bottom is a thin `▁` Seek bar, light `#EDE6DF` for played and dark `#2E251F` for the rest; clicking it seeks. No countdown.
+- **Card** (inset, darker: flat `#4A3D33` without images, `#4F4237`→`#463A30` in kitty): the title (bold `#F5F0EB`) and the artist (`#B7ABA0`), truncated with `…`. Along its bottom is a thin `▁` Seek bar, light `#EDE6DF` for played and dark `#2E251F` for the rest; clicking it seeks. No countdown.
 - **Right**: `⇄  ◁))  ↻`. The speaker shows the level (`◁× ` muted, `◁) ` low, `◁))` high), and a click mutes or unmutes. Shuffle and repeat show bold and underlined when on; repeat-one is `↻¹`.
-- **Narrow**: below about 62 columns the right-hand icons drop first, then the title area shrinks (6 cells minimum).
+- **Narrow**: below 64 columns (70 in kitty, with its picture ends) the right-hand icons drop first, then the title area shrinks (6 cells minimum).
 - **Hex colors**, not theme keys. The capsule paints its own background, so it reads the same on light and dark themes.
 - **Open**: whether the hint row under the prompt shows all 3 rows. If it only shows one, the Bar moves to the band above the prompt.
-- **Real pixels in kitty and Ghostty** (detected from `TERM`, `TERM_PROGRAM` and `KITTY_WINDOW_ID`; never inside tmux): the capsule ends are anti-aliased half-disc images, 3 cells wide, and the Cover is an image with rounded corners. Everything readable or clickable stays text cells, because the engine draws images as kitty Unicode placeholders: an image's cells are text, so nothing can be drawn over them, and gloss behind the text is impossible. Everywhere else, including Windows Terminal, the Bar uses the flat cell version.
-- The real Cover is decoded from Spotify's JPEG in hum itself, because images take only PNG or RGBA, in kitty too. See [Cover pixels](#cover-pixels-answered-2026-10-13).
+- **Real pixels in kitty and Ghostty** (detected from `TERM`, `TERM_PROGRAM` and `KITTY_WINDOW_ID`; never inside tmux): the capsule ends are anti-aliased half-disc images, 3 cells wide. Everything readable or clickable stays text cells, because the engine draws images as kitty Unicode placeholders: an image's cells are text, so nothing can be drawn over them, and gloss behind the text is impossible. Everywhere else, including Windows Terminal, the Bar uses the flat cell version.
 
 ## Dropped looks
 
@@ -112,13 +109,13 @@ These were tried in Prototype 1 and dropped by the user on 2026-10-13. Their cod
 
 The tui-design review lessons still apply to the remaining looks: theme colors or a self-painted background so light and dark both work; on-state as a shape, not just a color; a fixed-width countdown; widths measured, not guessed; and `NO_COLOR` respected.
 
-## Cover pixels: answered (2026-10-13)
+## The Cover: dropped (2026-10-13)
 
-Spotify serves covers as JPEG. The plugin's `Image` takes PNG or RGBA, and the half-block fallback also needs pixels. Prototype 2 (`prototypes/02-cover/`, issue 04) settled it:
+hum shows no Cover (album image) in any terminal ([ADR 0004](docs/adr/0004-drop-the-cover.md)). Claude Code's plugin `Image` draws real pixels only in kitty and Ghostty. Everywhere else, Windows Terminal included, a Cover can only be colored text cells. The user saw the real covers drawn that way (issue 05) and found them "just colored blocks", so the whole Cover was dropped, kitty included, and so was the earlier placeholder.
 
-- **Fetch with curl, not `$.http.fetch`** ([ADR 0003](docs/adr/0003-cover-bytes-through-curl.md)). `$.http.fetch` returns the body as UTF-8 text, which destroys a JPEG (a 2822-byte cover came back as 2663 characters, 1041 of them U+FFFD). hum runs `curl -sfL -o <file> <url>` with `$.process.run` and reads the file back with `$.fs.read(file, { as: 'bytes' })`. Without curl there is no Cover. The 64 px cover (`ab67616d00004851…`, 1–3 KB) is probably enough, even for Glass's 4×2 picture in kitty. That is still unchecked; issue 05 confirms it.
-- **Decode with jpeg-js**, vendored: 41 KB (13 KB minified), about 1 ms for a 64 px cover inside the engine and 6–10 ms for a 300 px one. Call it with `{ useTArray: true }`. Covers aren't always square (one was 63×64).
-- **Draw**: an `Image` from the decoded RGBA in kitty and Ghostty. Elsewhere, a `Raster` 2 cells wide and 1 row tall, each cell `▀`: foreground the top half's average color, background the bottom half's. The user chose 2 cells over 3 in Windows Terminal, judged it fine with and without truecolor, and chose it for Glass's card too.
+What issue 04 learned, kept in case the Cover returns (`prototypes/02-cover/`, the issue 04 Answer):
+- `$.http.fetch` returns the body as UTF-8 text and destroys a JPEG. The bytes came through `curl -o <file>` and `$.fs.read(file, { as: 'bytes' })` ([ADR 0003](docs/adr/0003-cover-bytes-through-curl.md), now superseded).
+- jpeg-js, vendored, decodes a 64 px cover in about 1 ms inside the engine. Call it with `{ useTArray: true }`.
 
 ## Later
 

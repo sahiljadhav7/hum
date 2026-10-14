@@ -46,7 +46,6 @@ export const GLASS = {
     card: ['#4F4237', '#4A3D33', '#463A30'],
     flatCard: '#4A3D33',
     ink: { title: '#F5F0EB', artist: '#B7ABA0', main: '#E9E2DA', quiet: '#E9E2DA', hover: '#FFFFFF', played: '#EDE6DF', track: '#2E251F', time: '#B7ABA0' },
-    swatch: null as string | null, // null: the track's own placeholder color
   },
   graphite: {
     rows: ['#585858', '#4E4E4E', '#444444'],
@@ -54,7 +53,6 @@ export const GLASS = {
     card: ['#3A3A3A', '#3A3A3A', '#3A3A3A'],
     flatCard: '#3A3A3A',
     ink: { title: '#EEEEEE', artist: '#BCBCBC', main: '#E4E4E4', quiet: '#E4E4E4', hover: '#FFFFFF', played: '#EEEEEE', track: '#262626', time: '#BCBCBC' },
-    swatch: '#6C6C6C' as string | null,
   },
 }
 
@@ -74,11 +72,3 @@ export const countdown = (remainingMs: number) => {
 }
 
 export const volumeGlyph = (volume: number) => (volume === 0 ? '◁× ' : volume < 0.5 ? '◁) ' : '◁))')
-
-/** Blends two 0xRRGGBB colors. */
-export const mix = (a: number, b: number, t: number) => {
-  const ch = (shift: number) => Math.round(((a >> shift) & 255) + (((b >> shift) & 255) - ((a >> shift) & 255)) * t)
-  return (ch(16) << 16) | (ch(8) << 8) | ch(0)
-}
-
-export const toHex = (c: number) => `#${c.toString(16).padStart(6, '0').toUpperCase()}`

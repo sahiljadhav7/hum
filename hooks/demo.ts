@@ -6,9 +6,9 @@ import { parseRepeat } from './spotify'
 import type { ApiCall } from './spotify'
 
 export const DEMO_TRACKS: Track[] = [
-  { title: 'Muddy Feet (feat Sia)', artist: 'Miley Cyrus, Sia', durationMs: 229_000, cover: [0x6fa3d8, 0x1d2b3a] },
-  { title: 'Flowers', artist: 'Miley Cyrus', durationMs: 200_000, cover: [0xffbe0b, 0x3a86ff] },
-  { title: 'Midnight City', artist: 'M83', durationMs: 243_000, cover: [0x8338ec, 0x06d6a0] },
+  { title: 'Muddy Feet (feat Sia)', artist: 'Miley Cyrus, Sia', durationMs: 229_000 },
+  { title: 'Flowers', artist: 'Miley Cyrus', durationMs: 200_000 },
+  { title: 'Midnight City', artist: 'M83', durationMs: 243_000 },
 ]
 
 /** Within this much of a track's start, Previous goes back a track; later, it restarts it (as Spotify does). */
