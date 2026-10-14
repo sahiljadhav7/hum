@@ -114,14 +114,17 @@ export function parseTokenReply(status: number, text: string, now: number): Toke
 
 /**
  * The node helper: listens on 127.0.0.1:8898 for Spotify's redirect (a
- * /callback with a code or an error), prints the full redirect URL as one
- * line on stdout, thanks the browser and exits. It gives up after 5 minutes.
+ * /callback with a code or an error, and this login's state, its one
+ * argument), prints the full redirect URL as one line on stdout, thanks the
+ * browser and exits. Any other request, say from a web page, gets a 404 and
+ * the helper keeps waiting. It gives up after 5 minutes.
  */
 export const HELPER_SCRIPT = `
 const http = require('http');
+const state = process.argv[1];
 const server = http.createServer((req, res) => {
   const url = new URL(req.url, 'http://127.0.0.1');
-  if (url.pathname !== '/callback' || !(url.searchParams.has('code') || url.searchParams.has('error'))) { res.writeHead(404); res.end(); return; }
+  if (url.pathname !== '/callback' || url.searchParams.get('state') !== state || !(url.searchParams.has('code') || url.searchParams.has('error'))) { res.writeHead(404); res.end(); return; }
   res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
   res.end('<!doctype html><title>hum</title><p style="font-family:system-ui">hum got Spotify’s answer. You can close this tab and go back to Claude Code.</p>');
   process.stdout.write('http://127.0.0.1:${HELPER_PORT}' + req.url + '\\n', () => process.exit(0));

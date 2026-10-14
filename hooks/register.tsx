@@ -3,7 +3,7 @@
 // that holds `$`. Requests go to the Spotify Web API through $.http.fetch, or
 // to Demo mode's fake Web API (hooks/demo.ts) when it is on.
 import { atom, read, update } from 'claude-code'
-import type { EngineInterface, Register } from 'claude-code'
+import type { EngineInterface, HookStream, Register } from 'claude-code'
 
 import type { DemoPlayer, Picker, PlaylistRow, Style, TrackRow } from '../types'
 import { authorizeUrl, challengeOf, formOf, HELPER_SCRIPT, isClientId, parseRedirect, parseTokenReply, randomToken, REDIRECT_URI, SETUP_STEPS, TOKEN_URL } from './auth'
@@ -51,6 +51,12 @@ let latestPoll = 0
 // The latest playlist opened in the Playlist picker; a slower, older open doesn't overwrite it.
 let latestOpen = 0
 
+// The login helper running, if any; a new login stops it, so only one holds the port.
+let helper: HookStream<unknown, unknown> | null = null
+// Until then, a poll that sees no Device doesn't undo a wake (Spotify may not list the Device yet).
+let wokeUntil = 0
+const WAKE_GRACE_MS = 5_000
+
 // The refresh in flight, if any: concurrent requests share it rather than each
 // spending the same refresh token (which Spotify may rotate). Module variable.
 let refreshing: Promise<RefreshResult> | null = null
@@ -83,9 +89,11 @@ async function refresh($: EngineInterface, auth: Auth): Promise<RefreshResult> {
   if (auth.refreshToken === '' || auth.clientId === '') return 'refused'
   refreshing = (async (): Promise<RefreshResult> => {
     const reply = await tokenRequest($, { grant_type: 'refresh_token', refresh_token: auth.refreshToken, client_id: auth.clientId })
-    if (!reply.ok) return reply.isTemporary ? 'temporary' : 'refused'
+    if (!reply.ok && reply.isTemporary) return 'temporary'
+    // Another Claude Code window may have refreshed first (refused here) or since: use the login it saved.
     const current = await storedAuth($)
     if (current === null || current.refreshToken !== auth.refreshToken) return current === null ? 'refused' : { token: current.accessToken }
+    if (!reply.ok) return 'refused'
     // Spotify may rotate the refresh token; keep the old one when it doesn't.
     await $.store.set('auth', { ...current, accessToken: reply.accessToken, refreshToken: reply.refreshToken ?? current.refreshToken, expiresAt: reply.expiresAt })
     return { token: reply.accessToken }
@@ -185,7 +193,8 @@ async function poll($: EngineInterface) {
   const at = await $.clock.now()
   // An error (429, 401, 5xx...) keeps the Now playing hum had.
   const np = parsePlayer(reply.status, reply.text, at, await read($, nowPlaying))
-  if (np !== null) await update($, nowPlaying, () => np)
+  if (np === null || (np.kind === 'playing' && !np.hasDevice && at < wokeUntil)) return
+  await update($, nowPlaying, () => np)
 }
 
 /** Shows `text` in the Bar in place of the title for a few seconds. */
@@ -205,6 +214,7 @@ async function wake($: EngineInterface, np: Playing) {
   const moved = deviceId === null ? null : await api($, transferCall(deviceId))
   if (deviceId === null || moved === null || moved.status >= 300) return showNote($, NOTE_OPEN_SPOTIFY)
   const at = await $.clock.now()
+  wokeUntil = at + WAKE_GRACE_MS
   await update($, barNote, () => ({ text: '', until: 0 }))
   // Show it playing now: the poll right after a transfer may not see the Device yet.
   await update($, nowPlaying, cur => (cur.kind === 'playing' ? { ...cur, isPlaying: true, at, hasDevice: true, deviceId } : cur))
@@ -427,14 +437,16 @@ async function finishLogin($: EngineInterface, redirectUrl: string) {
  * Runs the node helper, if node is installed, to catch the redirect; false if
  * it can't. It runs in the background; what happens is shown in the Bar.
  */
-async function startHelper($: EngineInterface) {
+async function startHelper($: EngineInterface, state: string) {
   if ((await runQuietly($, ['node', '--version'], 5_000))?.exitCode !== 0) return false
-  const helper = $.process.spawn({ argv: ['node', '-e', HELPER_SCRIPT] })
+  stopHelper()
+  const mine = $.process.spawn({ argv: ['node', '-e', HELPER_SCRIPT, state] })
+  helper = mine
   void (async () => {
     let out = ''
     let outcome: string | null = null
     try {
-      for await (const piece of helper) {
+      for await (const piece of mine) {
         if (piece.stream !== 'stdout') continue
         out += piece.text
         // Only whole lines: a piece may end mid-URL.
@@ -447,6 +459,9 @@ async function startHelper($: EngineInterface) {
     } catch {
       // The helper couldn't start: reported below.
     }
+    // Stopped for a newer login, or after a pasted one: that login reports for itself.
+    if (helper !== mine) return
+    helper = null
     // Still pending: the helper stopped (port taken, timed out) without a redirect, unless one was pasted.
     if (outcome === null && (await read($, pendingLogin)) !== null) await update($, nowPlaying, () => idle(HINT_PASTE))
     else if (outcome !== null && outcome !== LOGGED_IN) await update($, nowPlaying, () => idle(`hum: ${outcome}`))
@@ -454,12 +469,18 @@ async function startHelper($: EngineInterface) {
   return true
 }
 
+/** Stops the login helper, if one is running; leaving its stream ends the node process. */
+function stopHelper() {
+  void helper?.return(undefined)
+  helper = null
+}
+
 /** Starts a browser login with `clientId`: the helper first, so it's listening before Spotify redirects. */
 async function startLogin($: EngineInterface, clientId: string) {
   const pending: PendingLogin = { clientId, verifier: randomToken(64), state: randomToken(16) }
   await update($, pendingLogin, () => pending)
   const url = authorizeUrl(clientId, await challengeOf(pending.verifier), pending.state)
-  const isListening = await startHelper($)
+  const isListening = await startHelper($, pending.state)
   const opened = await openBrowser($, url)
   const nextStep = isListening
     ? 'Approve it, and hum finishes on its own.'
@@ -482,7 +503,12 @@ async function runLogin($: EngineInterface, args: string) {
     const stored = (await $.store.get('auth')) as Partial<Auth> | undefined
     return typeof stored?.clientId === 'string' && isClientId(stored.clientId) ? startLogin($, stored.clientId) : { text: SETUP_STEPS }
   }
-  if (/^https?:\/\//.test(given)) return { text: await finishLogin($, given) }
+  if (/^https?:\/\//.test(given)) {
+    const text = await finishLogin($, given)
+    // Pasted: the helper is no longer needed, and shouldn't hold the port for minutes.
+    if ((await read($, pendingLogin)) === null) stopHelper()
+    return { text }
+  }
   if (!isClientId(given))
     return { text: `"${given}" doesn't look like a Spotify client ID (32 letters and digits). Run /hum-login for the steps.` }
   return startLogin($, given)
@@ -493,6 +519,7 @@ async function runLogout($: EngineInterface) {
   const wasLoggedIn = (await storedAuth($)) !== null || (await read($, pendingLogin)) !== null
   await $.store.delete('auth')
   await update($, pendingLogin, () => null)
+  stopHelper()
   await clearLoginTrouble($)
   await update($, mutedFrom, () => null)
   await poll($)

@@ -151,3 +151,21 @@ test('/hum-demo no-device keeps the Bar, and ▶ wakes the demo Device', async (
   expect(await ui.find({ type: 'Text', text: '❚❚' })).toBeDefined()
   await ui.unmount()
 })
+
+test('right after ▶ wakes a Device, a poll that still sees none keeps ❚❚ for 5 s', async ($, on) => {
+  const clock = setup(on, {}, LOGGED_IN)
+  // Spotify answers the transfer, but its player keeps saying "no Device" (it is slow, or the Device never came).
+  spotify(on, req => {
+    const path = new URL(req.url).pathname.replace('/v1', '')
+    if (req.method === 'GET' && path === '/me/player/devices') return { status: 200, body: { devices: [device('phone')] } }
+    return { status: 204 }
+  })
+  await startSession($, on) // at 1 s; polls at 5 s and 9 s
+  const ui = await bar($)
+  await ui.press({ key: 'play' })
+  await clock.advance(4_000) // 5 s: within 5 s of the wake
+  expect(await ui.find({ type: 'Text', text: '❚❚' })).toBeDefined()
+  await clock.advance(4_000) // 9 s: past it, and still no Device
+  expect(await ui.find({ type: 'Text', text: ' ▶' })).toBeDefined()
+  await ui.unmount()
+})

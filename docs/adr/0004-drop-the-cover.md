@@ -12,4 +12,4 @@ hum shows no Cover (the current track's album image) in any terminal. Claude Cod
 
 - The Bar has no Cover in any Look. Glass's card holds only the title, the artist and the Seek bar.
 - hum needs no curl, no JPEG decoder and no image download. ADR 0003 is superseded.
-- Issue 05 is `wontfix`. Its code (commits 96e73f2 and 0287929, never pushed) was reset away. Issue 04's findings and `prototypes/02-cover/` stay as the record, if the Cover ever returns.
+- Issue 05 is `wontfix`. Its code (commits 96e73f2 and 0287929, never pushed) was reset away. Issue 04's findings stay as the record (its prototype was deleted on 2026-10-14 to keep installs lean; it's in git history at 772078c), if the Cover ever returns.

@@ -126,7 +126,7 @@ Tests go through two seams:
 - **The mounted Bar and its commands:** clicks, the Seek bar, `/hum-style`, `/hum-demo`.
 - **Spotify's HTTP boundary:** a test stands in for api.spotify.com and checks the exact requests.
 
-Type-checking needs the `claude-code` type declarations, which Claude Code writes beside a plugin it loads (`.claude-plugin/types/`, not committed). Run `tsc` with a tsconfig that includes them (see `prototypes/` for an example).
+Type-checking needs the `claude-code` type declarations, which Claude Code writes beside a plugin it loads (`.claude-plugin/types/`, not committed). Load hum once with `claude --plugin-dir .`, then run `tsc -p .`.
 
 ## License
 

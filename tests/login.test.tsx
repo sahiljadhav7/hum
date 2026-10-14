@@ -1,7 +1,7 @@
 // /hum-login and /hum-logout at three seams: the commands and the Bar, the
 // HTTP boundary (accounts.spotify.com and api.spotify.com stand-ins), and the
 // host boundary (the browser opener and the node helper, stood in for).
-import { expect, test } from 'claude-code/testing'
+import { expect, mock, test } from 'claude-code/testing'
 
 import { bar, CLIENT_ID, formFields, host, openedUrl, playerBody, run, setup, sha256url, spotify, startSession, TOKEN_URL, until } from './helpers'
 
@@ -377,4 +377,117 @@ test('the setup steps name the scopes hum asks for', async ($, on) => {
   const text = await login($)
   for (const scope of ['user-read-playback-state', 'user-modify-playback-state', 'playlist-read-private', 'playlist-read-collaborative'])
     expect(text).toContain(scope)
+})
+
+// Audit follow-ups.
+
+test('a refresh refused because another window already refreshed uses that window\'s login', async ($, on) => {
+  // The store stood in by hand, so "another window" can change it mid-refresh.
+  const store: Record<string, unknown> = STORED({ expiresAt: 30_000 })
+  mock.clock(on, { now: 1_000 })
+  mock.env(on, {})
+  on('store.get', (_$: unknown, e: { key: string }) => ({ value: store[e.key] }))
+  on('store.set', (_$: unknown, e: { key: string; value: unknown }) => {
+    store[e.key] = e.value
+    return { value: undefined }
+  })
+  const used: string[] = []
+  on('http.fetch', async (_$: unknown, e: { url: string; init?: { headers?: Record<string, string> } }) => {
+    const reply = (status: number, body: unknown) => ({ value: { status, ok: status < 300, headers: {}, text: JSON.stringify(body) } })
+    if (e.url === TOKEN_URL) {
+      // Another Claude Code window refreshed with ref-1 a moment earlier and saved its tokens.
+      store.auth = { clientId: CLIENT_ID, accessToken: 'from-other-window', refreshToken: 'ref-2', expiresAt: 3_600_000 }
+      return reply(400, { error: 'invalid_grant', error_description: 'Invalid refresh token' })
+    }
+    used.push(e.init?.headers?.Authorization ?? '')
+    return reply(200, playerBody())
+  })
+  await startSession($, on)
+  expect(used).toEqual(['Bearer from-other-window'])
+  const ui = await bar($)
+  expect(await ui.find({ type: 'Text', text: /Espresso/ })).toBeDefined()
+  await ui.unmount()
+})
+
+test("the helper is given this login's state, so it can ignore any other request", async ($, on) => {
+  const clock = setup(on)
+  const ran = host(on, argv => (argv[0] === 'node' ? { exitCode: 0, stdout: 'v24.2.0\n' } : { exitCode: 0 }))
+  const spawned: string[][] = []
+  on('process.spawn', (async function* (_$: unknown, e: { argv: readonly string[] }) {
+    spawned.push([...e.argv])
+    return { value: { code: 0, signal: null } }
+  }) as any)
+  spotifyWithLogin(on)
+  await startSession($, on)
+  await login($, CLIENT_ID)
+  await clock.settle()
+  expect(spawned[0]?.at(-1)).toBe(openedUrl(ran)!.searchParams.get('state'))
+})
+
+test('a second /hum-login stops the first helper and the new one finishes the login', async ($, on) => {
+  const clock = setup(on)
+  const ran = host(on, argv => (argv[0] === 'node' ? { exitCode: 0, stdout: 'v24.2.0\n' } : { exitCode: 0 }))
+  let helpers = 0
+  const stopped: number[] = []
+  on('process.spawn', (async function* () {
+    const n = ++helpers
+    try {
+      if (n === 1) {
+        // The first helper never sees a redirect (the user closed that tab).
+        while (true) {
+          let n = 0
+          await until(() => n++ > 0) // 5 ms
+          yield { stream: 'stderr', text: '.' }
+        }
+      }
+      await until(() => ran.filter(r => r.argv[0] === 'xdg-open').length === 2) // the second login's browser opened
+      const state = openedUrl([...ran].reverse())!.searchParams.get('state')!
+      yield { stream: 'stdout', text: `${REDIRECT}?code=second&state=${state}\n` }
+      return { value: { code: 0, signal: null } }
+    } finally {
+      if (n === 1) stopped.push(n)
+    }
+  }) as any)
+  const sent = spotifyWithLogin(on)
+  await startSession($, on)
+  await login($, CLIENT_ID)
+  await login($, CLIENT_ID)
+  // The stopped first helper must not claim the login failed while the second one waits.
+  const early = await bar($)
+  expect(await early.find({ type: 'Text', text: /Paste/ })).toBeUndefined()
+  await early.unmount()
+  await clock.settle()
+  await until(() => sent.some(r => r.url === TOKEN_URL))
+  expect(stopped).toEqual([1])
+  expect(formFields(sent.find(r => r.url === TOKEN_URL)?.body).code).toBe('second')
+  const ui = await bar($)
+  expect(await ui.find({ type: 'Text', text: /Paste/ })).toBeUndefined()
+  expect(await ui.find({ type: 'Text', text: /Espresso/ })).toBeDefined()
+  await ui.unmount()
+})
+
+test('pasting the address stops the helper, so it no longer holds the port', async ($, on) => {
+  const clock = setup(on)
+  const ran = host(on, argv => (argv[0] === 'node' ? { exitCode: 0, stdout: 'v24.2.0\n' } : { exitCode: 0 }))
+  const stopped: boolean[] = []
+  on('process.spawn', (async function* () {
+    try {
+      // The helper never sees the redirect (the browser opened on another machine).
+      while (true) {
+        let n = 0
+        await until(() => n++ > 0) // 5 ms
+        yield { stream: 'stderr', text: '.' }
+      }
+    } finally {
+      stopped.push(true)
+    }
+  }) as any)
+  spotifyWithLogin(on)
+  await startSession($, on)
+  await login($, CLIENT_ID)
+  const state = openedUrl(ran)!.searchParams.get('state')!
+  expect(await login($, `${REDIRECT}?code=pasted&state=${state}`)).toBe('logged in to Spotify.')
+  await clock.settle()
+  await until(() => stopped.length > 0)
+  expect(stopped).toEqual([true])
 })

@@ -17,7 +17,7 @@ claude plugin validate .       # what the engine would refuse
 tsc -p .                       # type-check; needs .claude-plugin/types/, written when Claude Code loads the plugin
 ```
 
-`tsconfig.json` only extends that generated file. Until Claude Code has loaded the plugin, editors show "Cannot use JSX" (restart the TS server once it exists), and `tsc -p prototypes/<x>` without its own types emits stray `.js` files.
+`tsconfig.json` only extends that generated file. Until Claude Code has loaded the plugin, editors show "Cannot use JSX" (restart the TS server once it exists).
 
 Run all three checks before calling work done. `/hum-demo` inside Claude Code gives a fake Spotify for trying things without an account.
 
@@ -31,7 +31,7 @@ Run all three checks before calling work done. `/hum-demo` inside Claude Code gi
 - `hooks/picker.tsx`: draws the Playlist picker (`/hum-playlist`). Pure.
 - `hooks/bar/`: drawing. `draw.tsx` (layouts), `look.ts` (palettes, widths), `pixels.ts` (kitty images), `seek.tsx` (Client module for the Seek bar).
 - `types/index.d.ts`: the plugin's state contract. It can't import, so it restates some types.
-- `tests/`: `helpers.ts` plus one file per area. `prototypes/` holds throwaway work; its tests are `*.proto-tests.tsx` so the suite skips them.
+- `tests/`: `helpers.ts` plus one file per area.
 
 ## Platform rules (the engine enforces these, or they bite at runtime)
 

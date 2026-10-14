@@ -12,7 +12,7 @@ This document replaces the tmux, standalone, and title/artist plan in `idea.md`.
 
 ## The Bar
 
-**Decided 2026-10-13: hum ships all three looks**, **Glossy** (the default), **Minimal** and **Glass**. Users switch with `/hum-style`, and the choice is remembered across sessions. In the prototype, `/hum-proto style` cycles through them. Each is described in its own section below. What they share:
+**Decided 2026-10-13: hum ships all three looks**, **Glossy** (the default), **Minimal** and **Glass**. Users switch with `/hum-style`, and the choice is remembered across sessions. Each is described in its own section below. What they share:
 
 - **Title and artist are shown.** This reverses the earlier "no title or artist" decision, after the user supplied a reference screenshot.
 - **Controls** `◀◀ ❚❚ ▶▶` (` ▶` when paused), plus `⇄` shuffle, `◁))` volume and `↻` repeat on the right. Plain click.
@@ -24,7 +24,7 @@ This document replaces the tmux, standalone, and title/artist plan in `idea.md`.
 - **`NO_COLOR`**: Minimal with no colors at all, using only bold, underline and inverse on hover.
 - **Idle state**: one dim hint line in place of the Controls, e.g. `hum: run /hum-login`, only when hum can't control anything (not logged in, a free account, an ad).
 - **Stays active when the music stops** (issue 09). When Spotify drops the Device, or has nothing loaded, the Bar keeps the last track, paused (` ▶`), with its Seek bar frozen where it stopped and all its Controls. Before anything has played it shows its Controls with a dim `Nothing playing` in place of the title.
-- **▶ wakes a Device**: with none active, ▶ asks Spotify for the user's Devices (`GET /v1/me/player/devices`) and moves playback to the one last seen playing if it's still listed, else to the first that has an id and isn't restricted (`PUT /v1/me/player`, `{ device_ids: [id], play: true }`). The Bar shows ❚❚ at once. The other Controls send nothing then.
+- **▶ wakes a Device**: with none active, ▶ asks Spotify for the user's Devices (`GET /v1/me/player/devices`) and moves playback to the one last seen playing if it's still listed, else to the first that has an id and isn't restricted (`PUT /v1/me/player`, `{ device_ids: [id], play: true }`). The Bar shows ❚❚ at once, and for 5 s a poll that doesn't list the Device yet doesn't undo it. The other Controls send nothing then.
 - **Notes**: for 5 s, a dim line in place of the title says what happened: `Open Spotify on your phone or computer, then ▶` when there's no Device to wake or Spotify refuses the transfer, and `No active device: press ▶ to start one` for another Control.
 - No keyboard shortcuts in v1, and no popups or toasts when a control is used.
 
@@ -43,7 +43,7 @@ This document replaces the tmux, standalone, and title/artist plan in `idea.md`.
 
 | Command | Does |
 | --- | --- |
-| `/hum-login` | With no argument: the one-time Developer app setup steps (the dashboard link, the exact redirect URI `http://127.0.0.1:8898/callback`, the scopes). `/hum-login <client-id>` opens the Spotify login in the browser (wslview or PowerShell's `Start-Process` under WSL, `open` on macOS, `xdg-open` on Linux), with PKCE and no client secret. A `node` helper on 127.0.0.1:8898, started before the browser opens, catches the redirect and finishes on its own. Without `node`, or if the helper can't listen, paste the address the browser lands on: `/hum-login <that URL>` (the Bar says so). Later, `/hum-login` with no argument logs in again with the stored client ID. Tokens are kept in `$.store` and refreshed a minute before they expire, or on a `401` (with one retry). A failure on Spotify's side (5xx, no answer) is temporary and doesn't log you out. A free account (`403 PREMIUM_REQUIRED`) gets `hum: Spotify Premium is needed to control playback`, and hum stops sending until the next login. |
+| `/hum-login` | With no argument: the one-time Developer app setup steps (the dashboard link, the exact redirect URI `http://127.0.0.1:8898/callback`, the scopes). `/hum-login <client-id>` opens the Spotify login in the browser (wslview or PowerShell's `Start-Process` under WSL, `open` on macOS, `xdg-open` on Linux), with PKCE and no client secret. A `node` helper on 127.0.0.1:8898, started before the browser opens, catches the redirect and finishes on its own. It accepts only a redirect carrying this login's state (anything else, say from a web page, gets a 404 and it keeps waiting); a new `/hum-login`, or a pasted address, stops it. Without `node`, or if the helper can't listen, paste the address the browser lands on: `/hum-login <that URL>` (the Bar says so). Later, `/hum-login` with no argument logs in again with the stored client ID. Tokens are kept in `$.store` and refreshed a minute before they expire, or on a `401` (with one retry). A failure on Spotify's side (5xx, no answer) is temporary and doesn't log you out. A free account (`403 PREMIUM_REQUIRED`) gets `hum: Spotify Premium is needed to control playback`, and hum stops sending until the next login. |
 | `/hum-logout` | Forgets the login (client ID and tokens). The Bar goes back to `hum: run /hum-login`. |
 | `/hum-playlist` | Opens the Playlist picker: the playlists the user owns or collaborates on, then the chosen playlist's tracks. Picking a track plays it within its playlist on the Active device, and the pane closes. See [Playlist picker](#playlist-picker). |
 | `/hum-style` | Switches the look: Glossy (default), Minimal or Glass. With no argument it shows the choices; the choice is remembered across sessions. |
@@ -87,7 +87,7 @@ The user asked for "smooth and minimalist" after Glass. Filled backgrounds are w
 
 ## Look: Glass (from the user's screenshot)
 
-The user supplied a screenshot of a glossy capsule player and asked for the Bar to look exactly like it. Glass is now the prototype's default look. **If accepted, it reverses two decisions**: the Bar becomes **3 rows** (not 1), and it **shows the title and artist**.
+The user supplied a screenshot of a glossy capsule player and asked for the Bar to look exactly like it. **If accepted, it reverses two decisions**: the Bar becomes **3 rows** (not 1), and it **shows the title and artist**.
 
 - **Capsule**: three rows, right-aligned.
   - **Windows Terminal, tmux, and anywhere without images**: flat and square. One brown `#6A594C`, no end caps, and no banded gradient. The user rejected the stair-stepped `▗▐▝` caps and a mosaic Cover as pixelated; crisp beats fake-smooth.
@@ -116,7 +116,7 @@ The tui-design review lessons still apply to the remaining looks: theme colors o
 
 hum shows no Cover (album image) in any terminal ([ADR 0004](docs/adr/0004-drop-the-cover.md)). Claude Code's plugin `Image` draws real pixels only in kitty and Ghostty. Everywhere else, Windows Terminal included, a Cover can only be colored text cells. The user saw the real covers drawn that way (issue 05) and found them "just colored blocks", so the whole Cover was dropped, kitty included, and so was the earlier placeholder.
 
-What issue 04 learned, kept in case the Cover returns (`prototypes/02-cover/`, the issue 04 Answer):
+What issue 04 learned, kept in case the Cover returns (the issue 04 Answer; the prototype is in git history at 772078c):
 - `$.http.fetch` returns the body as UTF-8 text and destroys a JPEG. The bytes came through `curl -o <file>` and `$.fs.read(file, { as: 'bytes' })` ([ADR 0003](docs/adr/0003-cover-bytes-through-curl.md), now superseded).
 - jpeg-js, vendored, decodes a 64 px cover in about 1 ms inside the engine. Call it with `{ useTArray: true }`.
 
