@@ -99,7 +99,7 @@ When the music stops the Bar stays, showing the last track paused (or `Nothing p
 | 08 | Playlist picker as a Card and Table; command reply fixes | Done |
 | 09 | The Bar stays active when the music stops | Done |
 
-The issues live in [`.scratch/hum/issues/`](.scratch/hum/issues/).
+The issues are tracked locally, not in this repo.
 
 ## How it works
 
